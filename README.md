@@ -80,6 +80,11 @@ so no Plex credentials are stored here.
 Certificates live in `~/SamsungCertificate/` and are never part of this repo. Signed
 `.wgt` packages are built in a temp folder and git-ignored.
 
+## Third-party code
+
+`pi/widgets/logo-3d/three-r128.js` is [Three.js](https://threejs.org) r128 (MIT license,
+copyright 2010-2021 Three.js Authors), included unmodified.
+
 ## Notes and limitations (2019 Q70R)
 
 - Third-party apps can't start themselves at power-on, so the Pi's watcher launches the

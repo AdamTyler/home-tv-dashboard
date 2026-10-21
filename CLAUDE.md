@@ -21,7 +21,8 @@ small sideloaded Tizen app on the TV displays it.
   - `static/index.html`: the dashboard page (also works in a normal browser)
   - `widgets/<type>/`: bottom-row widgets (`widget.py` data on the Pi, `widget.js` render on
     the TV, optional `widget.css`), listed in config `"widgets"`. See `pi/widgets/README.md`.
-    Current: `home-server`, `plex`, `system` (parked in `_unused_widgets`), `logo` (display-only).
+    Current: `home-server`, `plex`, `logo-3d` (Three.js r128 vendored as `three-r128.js`; newer
+    Three.js needs syntax the TV can't run), parked in `_unused_widgets`: `system`, `logo` (flat).
   - `static/demo.json`: sample data for `?demo=1` (weather, calendar, widgets), used for
     `docs/screenshot.png` (headless Chrome at 1920x1080). Never screenshot real data for the repo.
   - `tv-dashboard.service`: systemd unit (User=pi, venv python)

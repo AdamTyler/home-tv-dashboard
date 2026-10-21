@@ -36,8 +36,10 @@ Add it to `"widgets"` in `pi/config.json`, or in the Pi's `config.local.json` to
 The same type can appear more than once with different options. `config.json` parks widgets
 that aren't shown under `"_unused_widgets"`, so you can swap them back in.
 
-Included: `home-server`, `plex`, `system`, and `logo` (an SVG with a slow color shift;
-`display.src` and `display.seconds`).
+Included: `home-server`, `plex`, `system`, `logo` (an SVG with a slow color shift;
+`display.src` and `display.seconds`), and `logo-3d` (the logo extruded and rotating in WebGL
+with a bundled Three.js r128, the last version that runs on the TV's engine; `display.seconds`,
+`display.depth`, `display.fallback` for a flat logo when WebGL isn't available).
 
 To screenshot a widget, open `http://<pi>:8080/?demo=1`. It shows sample data from
 `pi/static/demo.json`; add a sample entry for your widget type there.
