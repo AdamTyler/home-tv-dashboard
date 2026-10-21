@@ -18,7 +18,8 @@ sed -i '' "s|__DASHBOARD_URL__|$DASHBOARD_URL|g" "$BUILD/index.html"
 # The package is named after the app ("Home Dashboard.wgt"); tizen install fails on spaces.
 mv "$BUILD"/*.wgt "$BUILD/HomeDashboard.wgt"
 
-"$SDB" connect "$TV_IP"
+# A stale sdb server can refuse to connect; restart it once if needed.
+"$SDB" connect "$TV_IP" | grep -q "connected" || { "$SDB" kill-server >/dev/null 2>&1; "$SDB" connect "$TV_IP"; }
 "$TIZEN" install -n "$BUILD/HomeDashboard.wgt" -s "$TV_IP:26101"
 "$SDB" -s "$TV_IP:26101" shell 0 kill HmDash0001 >/dev/null 2>&1 || true
 "$SDB" -s "$TV_IP:26101" shell 0 execute HmDash0001.HomeDash

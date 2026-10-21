@@ -329,6 +329,8 @@
     }
     btn.className = "app busy";
     toast("Opening " + app.name + "…");
+    // Let the TV app restore the sound before the Pi switches apps.
+    if (inTvApp) window.parent.postMessage({ leaving: true }, "*");
     fetch("/api/launch", {
       method: "POST",
       headers: { "Content-Type": "application/json" },

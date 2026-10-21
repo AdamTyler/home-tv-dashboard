@@ -88,21 +88,136 @@ def open_dashboard():
         tv_call(lambda tv: tv.open_browser(CFG["dashboard_url"]))
 
 
+# The TV app reports when it's on screen (POST /api/tvapp), so the watcher can
+# tell whether a launch stuck. While waking up, the TV sometimes pushes the app
+# aside to resume live TV.
+_tvapp = {"visible": False, "at": 0.0, "intentional_at": 0.0}
+_tvapp_changed = threading.Condition()
+
+
+def tvapp_report(visible=None, intentional=False):
+    with _tvapp_changed:
+        if visible is not None:
+            _tvapp["visible"] = visible
+            _tvapp["at"] = time.time()
+        if intentional:
+            _tvapp["intentional_at"] = time.time()
+        _tvapp_changed.notify_all()
+
+
+def _wait_for(predicate, timeout):
+    with _tvapp_changed:
+        return _tvapp_changed.wait_for(predicate, timeout)
+
+
+def _try_open():
+    for attempt in range(5):
+        try:
+            open_dashboard()
+            return True
+        except Exception as e:
+            log.warning("could not open dashboard (attempt %d): %s", attempt + 1, e)
+            time.sleep(2)
+    return False
+
+
+# --- TV mute over UPnP --------------------------------------------------------
+# The TV's DLNA renderer (port 9197) can read and set mute exactly, unlike the
+# remote's Mute key, which only toggles.
+
+_upnp = {"control": None}
+
+
+def _upnp_call(action, args=""):
+    if not _upnp["control"]:
+        base = "http://%s:9197" % CFG["tv_ip"]
+        with urllib.request.urlopen(base + "/dmr", timeout=3) as r:
+            desc = r.read().decode()
+        m = re.search(r"RenderingControl:1</serviceType>.*?<controlURL>([^<]+)</controlURL>", desc, re.S)
+        _upnp["control"] = base + m.group(1)
+    body = ('<?xml version="1.0"?><s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/" '
+            's:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/"><s:Body>'
+            '<u:%s xmlns:u="urn:schemas-upnp-org:service:RenderingControl:1">'
+            '<InstanceID>0</InstanceID><Channel>Master</Channel>%s</u:%s></s:Body></s:Envelope>'
+            % (action, args, action))
+    req = urllib.request.Request(_upnp["control"], body.encode(), {
+        "Content-Type": 'text/xml; charset="utf-8"',
+        "SOAPACTION": '"urn:schemas-upnp-org:service:RenderingControl:1#%s"' % action})
+    with urllib.request.urlopen(req, timeout=3) as r:
+        return r.read().decode()
+
+
+def tv_muted():
+    return "<CurrentMute>1</CurrentMute>" in _upnp_call("GetMute")
+
+
+def set_tv_mute(on):
+    _upnp_call("SetMute", "<DesiredMute>%d</DesiredMute>" % (1 if on else 0))
+
+
+def hold_mute(woke, stop, limit=90):
+    """While the TV starts up it restores its channel, and switching to the
+    dashboard app unmutes it again. Keep it muted until start-up has settled
+    (`stop` is set) or the user leaves on purpose. Runs in the background."""
+    end = woke + limit
+    while time.time() < end and not stop.is_set() and _tvapp["intentional_at"] < woke:
+        try:
+            if not tv_muted():
+                set_tv_mute(True)
+                log.info("muted the TV during start-up (+%.1fs)", time.time() - woke)
+        except Exception:
+            _upnp["control"] = None  # renderer not up yet; retry
+        stop.wait(0.5)
+
+
+def ensure_dashboard(launches=4, settle=10):
+    """Open the dashboard and relaunch it if the TV pushes it aside within
+    `settle` seconds (leaving on purpose doesn't count). True if it stayed up."""
+    for launch in range(launches):
+        started = time.time()
+        if not _try_open():
+            return False
+        if not _wait_for(lambda: _tvapp["visible"] and _tvapp["at"] >= started, 8):
+            log.warning("dashboard didn't come up (launch %d); retrying", launch + 1)
+            continue
+        shown = time.time()
+        if not _wait_for(lambda: not _tvapp["visible"], settle):
+            log.info("dashboard is up (launch %d)", launch + 1)
+            return True
+        if _tvapp["intentional_at"] >= shown:
+            return True  # the user left on purpose
+        log.warning("TV pushed the dashboard aside (launch %d); relaunching", launch + 1)
+    return False
+
+
 def watcher():
     last = tv_power()
     log.info("watcher started; TV is %s", last)
     while True:
-        time.sleep(3)
+        time.sleep(1)  # notice power-on quickly; the TV resumes live TV with sound
         now = tv_power()
         if now != last:
             log.info("TV power: %s -> %s", last, now)
         if now == "on" and last != "on":
-            time.sleep(CFG.get("launch_delay_seconds", 8))
-            try:
-                open_dashboard()
-                log.info("opened dashboard on TV")
-            except Exception as e:
-                log.warning("could not open dashboard: %s", e)
+            # The TV resumes live TV with sound on wake. Hold it muted until the
+            # dashboard is up; its live preview keeps it muted and unmutes when
+            # you leave the dashboard.
+            woke = time.time()
+            stop = threading.Event()
+            keeper = None
+            if CFG.get("mute_on_power_on", True):
+                keeper = threading.Thread(target=hold_mute, args=(woke, stop), daemon=True)
+                keeper.start()
+            # Launching while the TV is still restoring its channel gets ignored
+            # or pushed aside, so wait for start-up to settle first.
+            time.sleep(CFG.get("launch_delay_seconds", 10))
+            opened = ensure_dashboard(settle=15)
+            stop.set()  # the dashboard owns the mute from here
+            if keeper and not opened and _tvapp["intentional_at"] < woke:
+                try:  # don't leave the TV silent if the dashboard never opened
+                    set_tv_mute(False)
+                except Exception:
+                    pass
         last = now
 
 
@@ -368,9 +483,13 @@ class Handler(SimpleHTTPRequestHandler):
         try:
             if self.try_widget_route("POST", body):
                 return
+            if self.path == "/api/tvapp":
+                tvapp_report(bool(body.get("visible")), bool(body.get("intentional")))
+                return self.send_json({"ok": True})
             if self.path == "/api/launch":
                 app = next(a for a in CFG["apps"]
                            if a.get("id") and a["id"] == body.get("id"))
+                tvapp_report(intentional=True)  # leaving for an app on purpose
                 tv_call(lambda tv: tv.run_app(app["id"]))
                 log.info("launched %s", app["name"])
                 return self.send_json({"ok": True})

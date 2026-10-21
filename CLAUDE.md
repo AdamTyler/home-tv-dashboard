@@ -29,6 +29,10 @@ small sideloaded Tizen app on the TV displays it.
     the Google Photos **Picker API** (full-library read access ended March 2025). OAuth uses a
     Desktop client and loopback sign-in on the Mac (`scripts/google-photos-auth.py`); the device
     flow doesn't allow the picker scope. Credentials: `google-photos.json` on the Pi (git-ignored).
+    Shared-album sync (unofficial): parses `lh3.googleusercontent.com/pw/...` URLs from the public
+    album page. `photos.app.goo.gl` short links must be resolved **without** a browser User-Agent
+    (browsers get a JS page; other clients get a 302 to `share/...?key=`), then the album page is
+    fetched **with** one. Links without `?key=` return 404.
   - `static/demo.json`: sample data for `?demo=1` (weather, calendar, widgets), used for
     `docs/screenshot.png` (headless Chrome at 1920x1080). Never screenshot real data for the repo.
   - `tv-dashboard.service`: systemd unit (User=pi, venv python)
@@ -84,6 +88,27 @@ small sideloaded Tizen app on the TV displays it.
 - Deleting the TV's Internet app breaks browser launches ("Not available"). Smart Hub reset restores
   it but signs you out of apps and wipes the app list; tiles fail until their apps are reinstalled.
 - App privileges: internet, tv.inputdevice, application.launch, tv.window, tv.audio.
+
+## Power-on sequence (took many iterations; don't simplify without testing several power-ons)
+
+- TV settings must be **Autorun Smart Hub = Off, Autorun Samsung TV Plus = Off, Autorun Last
+  App = Off** (Settings → General → Smart Features). Otherwise the Home hub / TV Plus race the
+  dashboard, cover it without the app being told, and reset mute.
+- On wake the TV resumes live TV with sound and spends ~10 s restoring its channel. App launches
+  in that window are ignored or pushed aside, so the Pi waits `launch_delay_seconds` (10).
+- Mute: the remote's KEY_MUTE only toggles. The Pi uses the TV's **UPnP RenderingControl**
+  (`http://<tv>:9197/dmr` → `/upnp/control/RenderingControl1`, GetMute/SetMute) to set mute
+  exactly and re-checks every 0.5 s (`hold_mute`) until the dashboard has settled, because the
+  channel restore and the switch to the app both unmute. If the dashboard never opens, it unmutes.
+- The Pi verifies launches: the TV app POSTs `/api/tvapp {visible, intentional}`; `ensure_dashboard`
+  relaunches if it doesn't show within 8 s or is pushed aside within 15 s (`settle`).
+- **The live preview (`tvwindow.show`) must wait ~20 s after the app (re)starts** (`PREVIEW_DELAY`
+  in the TV app). Starting it while the TV is still waking makes the TV switch to full-screen live
+  TV and push the dashboard aside.
+- The TV app mutes on load, keeps mute if pushed aside during start-up (15 s grace, reset after
+  being hidden > 30 s, i.e. a wake from standby), and restores sound only when the user leaves on
+  purpose (tile, Samsung TV, Back; the page posts `{leaving: true}` before Pi-launched tiles).
+- The TV's own mute icon appears whenever an app mutes; it can't be hidden.
 
 ## Local config and secrets: never commit
 

@@ -3,7 +3,8 @@
   "port": 8080,
   "dashboard_url": "http://raspberrypi.local:8080/",
   "dashboard_app_id": "HmDash0001.HomeDash",
-  "launch_delay_seconds": 8,
+  "launch_delay_seconds": 10,
+  "mute_on_power_on": true,
   "timezone": "UTC",
   "location": null,
   "widgets": [

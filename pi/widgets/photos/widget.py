@@ -10,14 +10,22 @@ options (set your own in config.local.json under "widget_options": {"photos": {.
   credentials: Google sign-in file from scripts/google-photos-auth.py
                (default /opt/tv-dashboard/google-photos.json, never committed)
   max_size: longest side of the copies sent to the TV, in px (default 1280)
+  albums: shared Google Photos albums to keep in sync (UNOFFICIAL: reads Google's
+          public album page, which Google may change at any time). Keep these in
+          config.local.json; anyone with a link can see the album.
+          [{"url": "https://photos.app.goo.gl/...", "name": "optional"}]
+  album_sync_hours: how often to re-check albums (default 6)
 
 routes (under /api/widget/<index>/):
-  photo/<id>        a resized photo
-  pick              page to open on your phone to choose photos
-  pick/start (POST) create a picker session
-  pick/status       progress of the current pick
+  photo/<id>          a resized photo
+  pick                page to open on your phone to choose photos
+  pick/start (POST)   create a picker session
+  pick/status         progress of the current pick
+  albums/status       shared-album sync status
+  albums/sync (POST)  sync shared albums now
 """
 import hashlib
+import html
 import io
 import json
 import logging
@@ -74,6 +82,7 @@ def _scan(options):
 
 
 def data(options):
+    _start_album_scheduler(options)
     by_id = _scan(options)
     ids = list(by_id)
     random.shuffle(ids)
@@ -211,6 +220,93 @@ def _start_pick(options):
         return dict(_pick)
 
 
+# --- Shared albums (unofficial) -------------------------------------------
+# A shared album's public page embeds its photos' URLs. This is not a Google
+# API and only covers the photos in the page's first batch (often a few
+# hundred), but it keeps whole albums in sync without picking.
+
+ALBUM_PHOTO = re.compile(r'\["(https://lh3\.googleusercontent\.com/pw/[A-Za-z0-9_-]+)",\d+,\d+')
+ALBUM_TITLE = re.compile(r'<meta property="og:title" content="([^"]*)"')
+BROWSER_UA = ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
+              "(KHTML, like Gecko) Chrome/124.0 Safari/537.36")
+_albums = {"state": "idle", "last": None, "error": None, "albums": []}
+_albums_lock = threading.Lock()
+_albums_scheduler = []
+
+
+def _album_page(url):
+    if "goo.gl/" in url:
+        # Short links serve a JavaScript page to browsers but a plain redirect
+        # (to photos.google.com/share/...?key=...) to other clients.
+        req = urllib.request.Request(url, headers={"User-Agent": "tv-dashboard"})
+        with urllib.request.urlopen(req, timeout=30) as r:
+            url = r.geturl()
+    req = urllib.request.Request(url, headers={"User-Agent": BROWSER_UA})
+    with urllib.request.urlopen(req, timeout=30) as r:
+        page = r.read().decode("utf-8", "replace")
+    urls = []
+    for m in ALBUM_PHOTO.finditer(page):
+        if m.group(1) not in urls:
+            urls.append(m.group(1))
+    title = ALBUM_TITLE.search(page)
+    # Titles look like "Name · Nov 14, 2022 – Dec 1, 2024 📸"; keep the name.
+    name = html.unescape(title.group(1)).split(" - Google Photos")[0].split(" · ")[0] if title else ""
+    return name.strip(), urls
+
+
+def _sync_albums(options):
+    if not _albums_lock.acquire(blocking=False):
+        return  # already syncing
+    try:
+        _albums.update(state="syncing", error=None)
+        results = []
+        for album in options.get("albums", []):
+            info = {"name": album.get("name", ""), "photos": 0, "added": 0, "error": None}
+            try:
+                title, urls = _album_page(album["url"])
+                info["name"] = info["name"] or title or "Album"
+                safe = re.sub(r"[^\w .&'-]", "", info["name"]).strip() or "Album"
+                dest = os.path.join(_folder(options), "Albums", safe)
+                os.makedirs(dest, exist_ok=True)
+                info["photos"] = len(urls)
+                for url in urls:
+                    target = os.path.join(dest, hashlib.sha1(url.encode()).hexdigest()[:16] + ".jpg")
+                    if os.path.exists(target):
+                        continue
+                    req = urllib.request.Request(url + "=w2048-h2048",
+                                                 headers={"User-Agent": BROWSER_UA})
+                    with urllib.request.urlopen(req, timeout=60) as r:
+                        content = r.read()
+                    with open(target + ".tmp", "wb") as f:
+                        f.write(content)
+                    os.replace(target + ".tmp", target)
+                    info["added"] += 1
+            except Exception as e:
+                log.warning("photos: album sync failed for %s: %s", info["name"] or "album", e)
+                info["error"] = str(e)
+            results.append(info)
+        _listing["at"] = 0  # rescan the folder
+        _albums.update(state="idle", last=time.time(), albums=results)
+        added = sum(a["added"] for a in results)
+        if added:
+            log.info("photos: added %d photos from shared albums", added)
+    finally:
+        _albums_lock.release()
+
+
+def _start_album_scheduler(options):
+    """Re-sync shared albums every album_sync_hours, in the background."""
+    if _albums_scheduler or not options.get("albums"):
+        return
+    def loop():
+        while True:
+            _sync_albums(options)
+            time.sleep(options.get("album_sync_hours", 6) * 3600)
+    t = threading.Thread(target=loop, daemon=True)
+    _albums_scheduler.append(t)
+    t.start()
+
+
 # --- Routes ---------------------------------------------------------------
 
 def route(options, method, subpath, query, body):
@@ -230,4 +326,10 @@ def route(options, method, subpath, query, body):
             return {"state": "error", "error": str(e)}
     if subpath == "pick/status" and method == "GET":
         return dict(_pick, photos=len(_scan(options)))
+    if subpath == "albums/status" and method == "GET":
+        _start_album_scheduler(options)
+        return dict(_albums, configured=len(options.get("albums", [])))
+    if subpath == "albums/sync" and method == "POST":
+        threading.Thread(target=_sync_albums, args=(options,), daemon=True).start()
+        return {"state": "syncing"}
     return None

@@ -19,6 +19,13 @@
   .bar { height: 8px; background: #262d36; border-radius: 4px; overflow: hidden; margin-top: 10px; }
   .bar i { display: block; height: 100%; width: 0; background: #3fb950; transition: width .3s; }
   .err { color: #f85149; }
+  .hint { font-size: 14px; margin: 16px 0 0; }
+  h2 { font-size: 19px; margin: 40px 0 6px; }
+  button.secondary { background: #262d36; }
+  #album-list { list-style: none; padding: 0; margin: 0 0 16px; }
+  #album-list li { padding: 10px 0; border-bottom: 1px solid #262d36; }
+  #album-list small { display: block; color: #8b96a3; }
+  #album-status { margin-top: 12px; color: #8b96a3; font-size: 15px; }
 </style>
 </head>
 <body>
@@ -27,6 +34,16 @@
   <p>Choose photos in Google Photos and they'll be copied to the Pi for the dashboard slideshow.</p>
   <button id="start">Choose photos</button>
   <div id="status"></div>
+  <p class="hint">Tip: albums aren't listed in the picker, but you can search for an album's name and
+    select its photos.</p>
+
+  <section id="albums" style="display:none">
+    <h2>Shared albums</h2>
+    <p>These albums stay in sync automatically. New photos are copied every few hours.</p>
+    <ul id="album-list"></ul>
+    <button id="sync" class="secondary">Sync albums now</button>
+    <div id="album-status"></div>
+  </section>
 </main>
 <script>
   var btn = document.getElementById("start"), status = document.getElementById("status");
@@ -73,6 +90,36 @@
     });
   };
   poll();
+
+  // Shared albums (only shown when some are configured on the Pi)
+  var albumPoll = null, syncBtn = document.getElementById("sync");
+  function esc(s) { var d = document.createElement("div"); d.textContent = s; return d.innerHTML; }
+  function showAlbums(a) {
+    if (!a.configured) return;
+    document.getElementById("albums").style.display = "block";
+    document.getElementById("album-list").innerHTML = a.albums.map(function (x) {
+      var detail = x.error ? '<span class="err">' + esc(x.error) + "</span>"
+        : x.photos + " photos" + (x.added ? " · " + x.added + " new last sync" : "");
+      return "<li>" + esc(x.name || "Album") + "<small>" + detail + "</small></li>";
+    }).join("") || "<li><small>Not synced yet.</small></li>";
+    var syncing = a.state === "syncing";
+    syncBtn.disabled = syncing;
+    document.getElementById("album-status").textContent = syncing ? "Syncing…"
+      : a.last ? "Last synced " + new Date(a.last * 1000).toLocaleString() : "";
+    if (syncing && !albumPoll) albumPoll = setInterval(pollAlbums, 3000);
+    if (!syncing && albumPoll) { clearInterval(albumPoll); albumPoll = null; }
+  }
+  function pollAlbums() {
+    fetch("albums/status", { cache: "no-store" }).then(function (r) { return r.json(); }).then(showAlbums);
+  }
+  syncBtn.onclick = function () {
+    syncBtn.disabled = true;
+    fetch("albums/sync", { method: "POST", body: "{}" }).then(function () {
+      showAlbums({ configured: 1, state: "syncing", albums: [] });
+      pollAlbums();
+    });
+  };
+  pollAlbums();
 </script>
 </body>
 </html>

@@ -103,6 +103,14 @@ Photos into that folder. You can also drop photos into the folder yourself.
 While the Google app is in Testing mode, the sign-in expires after 7 days. Photos already on the
 Pi keep showing; re-run step 3 before picking more.
 
+The picker can't select a whole album (search for the album's name and select its photos
+instead). To keep **whole albums in sync**, share them by link and list them in `config.local.json`:
+`"widget_options": {"photos": {"albums": [{"url": "https://photos.app.goo.gl/..."}]}}`. The Pi
+re-checks every 6 hours (`album_sync_hours`) and copies new photos to `Albums/<name>/`. This is
+**unofficial**: it reads Google's public album page, covers only the first batch of photos it
+lists (often a few hundred), and may stop working if Google changes that page. Anyone with an
+album link can view the album, so keep links out of the repo.
+
 ## Third-party code
 
 `pi/widgets/logo-3d/three-r128.js` is [Three.js](https://threejs.org) r128 (MIT license,
@@ -111,7 +119,12 @@ copyright 2010-2021 Three.js Authors), included unmodified.
 ## Notes and limitations (2019 Q70R)
 
 - Third-party apps can't start themselves at power-on, so the Pi's watcher launches the
-  app when the TV's API reports it turned on.
+  app when the TV's API reports it turned on. For reliable start-up, turn **off** Autorun Smart
+  Hub, Autorun Samsung TV Plus and Autorun Last App (Settings → General → Smart Features).
+  The Pi holds the TV muted over UPnP while it wakes (the TV resumes live TV with sound),
+  launches the dashboard about 10 seconds in, and relaunches it if the TV pushes it aside.
+  The live preview starts about 20 seconds after the dashboard does; starting it earlier makes
+  the TV jump to full-screen live TV.
 - Samsung TV Plus / live TV can't be opened through the remote API (it returns a
   "server under maintenance" error). The TV app opens `org.tizen.tv-viewer` itself instead.
 - The live preview uses `tizen.tvwindow`. On this model video is drawn **above** all web

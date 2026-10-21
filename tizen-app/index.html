@@ -28,17 +28,81 @@
     try { frame.contentWindow.postMessage(data, "*"); } catch (e) {}
   }
 
-  function setMute(on) {
-    try { tizen.tvaudiocontrol.setMute(on); } catch (e) {}
+  // Report audio problems to the Pi's log (the TV has no console we can read).
+  function log(message) {
+    try {
+      var x = new XMLHttpRequest();
+      x.open("POST", DASHBOARD + "api/log");
+      x.setRequestHeader("Content-Type", "application/json");
+      x.send(JSON.stringify({ tvapp: message }));
+    } catch (e) {}
   }
+
+  // Tell the Pi whether the dashboard is on screen, so it can relaunch it if
+  // the TV pushes it aside while waking up. "intentional" = the user left.
+  function report(visible, intentional) {
+    try {
+      var x = new XMLHttpRequest();
+      x.open("POST", DASHBOARD + "api/tvapp");
+      x.setRequestHeader("Content-Type", "application/json");
+      x.send(JSON.stringify({ visible: visible, intentional: !!intentional }));
+    } catch (e) {}
+  }
+
+  // Silence the TV while the preview plays, and put the sound back exactly as
+  // it was afterwards. Mute first; if the TV ignores that, drop the volume to 0
+  // and remember the old level.
+  var quietedBy = null;  // null, "mute" or a saved volume level
+  function setQuiet(on) {
+    var audio = window.tizen && tizen.tvaudiocontrol;
+    if (!audio) return;
+    if (on && quietedBy === null) {
+      try {
+        audio.setMute(true);
+        if (audio.isMute()) { quietedBy = "mute"; return; }
+        log("setMute(true) had no effect; using volume 0");
+      } catch (e) {
+        log("setMute failed: " + (e.message || e.name || e));
+      }
+      try {
+        var level = audio.getVolume();
+        audio.setVolume(0);
+        quietedBy = level;
+      } catch (e) {
+        log("setVolume failed: " + (e.message || e.name || e));
+      }
+    } else if (!on && quietedBy !== null) {
+      try {
+        if (quietedBy === "mute") audio.setMute(false);
+        else audio.setVolume(quietedBy);
+      } catch (e) {
+        log("restoring sound failed: " + (e.message || e.name || e));
+      }
+      quietedBy = null;
+    }
+  }
+
+  // Starting the live preview while the TV is still waking up seems to make it
+  // switch to full-screen live TV, so wait a little after each (re)start.
+  var PREVIEW_DELAY = 20000, previewTimer = null;
 
   // Live TV preview: show the TV's current channel in a rectangle on screen.
   function showPreview(r) {
     lastRect = r;
+    var wait = startedAt + PREVIEW_DELAY - Date.now();
+    if (wait > 0) {
+      clearTimeout(previewTimer);
+      previewTimer = setTimeout(function () { if (!document.hidden) showPreview(lastRect); }, wait);
+      return;
+    }
+    var wasQuiet = quietedBy !== null;
+    setQuiet(true);  // before the video starts, so there's no burst of sound
+    if (!wasQuiet && quietedBy !== null) {
+      log("preview quieted via " + (quietedBy === "mute" ? "mute" : "volume 0 (was " + quietedBy + ")"));
+    }
     try {
       tizen.tvwindow.show(function () {
         previewOn = true;
-        setMute(true);
       }, function (err) {
         send({ previewError: err.message });
       }, [r.x + "px", r.y + "px", r.w + "px", r.h + "px"], "MAIN");
@@ -47,14 +111,24 @@
     }
   }
 
-  function hidePreview() {
+  function hidePreview(keepQuiet) {
+    if (!keepQuiet) setQuiet(false);  // restore the sound, even if the preview never showed
     if (!previewOn) return;
     previewOn = false;
     try { tizen.tvwindow.hide(function () {}, function () {}, "MAIN"); } catch (e) {}
-    setMute(false);
+  }
+
+  // While the TV is waking up it can push the dashboard aside, and the Pi then
+  // relaunches it. Stay muted through that, unless the user is leaving on purpose
+  // (a tile, Samsung TV, Back): those set `leaving` and restore the sound.
+  var startedAt = Date.now(), leaving = false;
+  function bumpedDuringStartup() {
+    return !leaving && Date.now() - startedAt < 15000;
   }
 
   function exitApp() {
+    leaving = true;
+    report(false, true);
     hidePreview();
     try { tizen.application.getCurrentApplication().exit(); } catch (e) {}
   }
@@ -66,7 +140,13 @@
     if (d === "exit") return exitApp();
     if (!d) return;
     if (d.preview) return showPreview(d.preview);
+    if (d.leaving) {  // the page is about to open an app through the Pi
+      leaving = true;
+      return hidePreview();
+    }
     if (d.launch) {
+      leaving = true;
+      report(false, true);
       hidePreview();
       try {
         tizen.application.launch(d.launch, null, function (err) {
@@ -81,12 +161,28 @@
     if (e.keyCode === 10009) exitApp();
   });
 
-  // Leaving the app (another app opens, Home is pressed): stop the preview and unmute.
+  // Leaving the app (another app opens, Home is pressed): stop the preview and
+  // unmute, except when the TV bumps us aside while waking up.
+  var hiddenAt = 0;
   document.addEventListener("visibilitychange", function () {
-    if (document.hidden) hidePreview();
-    else if (lastRect) showPreview(lastRect);
+    report(!document.hidden);
+    if (document.hidden) {
+      hiddenAt = Date.now();
+      hidePreview(bumpedDuringStartup());
+      return;
+    }
+    // Back after a long time hidden (the TV was off or asleep) counts as a
+    // fresh start: being pushed aside while the TV wakes shouldn't unmute.
+    if (hiddenAt && Date.now() - hiddenAt > 30000) {
+      startedAt = Date.now();
+      leaving = false;
+    }
+    setQuiet(true);
+    if (lastRect) showPreview(lastRect);
   });
-  window.addEventListener("unload", hidePreview);
+  report(!document.hidden);
+  setQuiet(true);  // mute right away; don't wait for the preview to start
+  window.addEventListener("unload", function () { hidePreview(bumpedDuringStartup()); });
 
   function load() {
     var xhr = new XMLHttpRequest();
