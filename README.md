@@ -1,0 +1,88 @@
+# Home TV Dashboard
+
+A home screen for a 2019 Samsung QN75Q70R (Tizen 5.0), served from a Raspberry Pi.
+When the TV turns on, the Pi opens the dashboard automatically.
+
+- Clock, date and a 5-day forecast (Open-Meteo, no API key)
+- App tiles that launch Netflix, YouTube TV, Plex and the rest on the TV
+- A live Samsung TV preview tile that opens live TV / Samsung TV Plus
+- An **Upcoming** column from Google Calendar (private iCal links) plus US holidays
+- Home server status: Plex now playing and recently added, Samba, Transmission, NordVPN, media drive, Pi health
+
+## How it fits together
+
+```
+ TV (Tizen app "Home Dashboard")             Raspberry Pi (/opt/tv-dashboard)
+ ┌───────────────────────────────┐           ┌─────────────────────────────────┐
+ │ tizen-app/index.html          │  iframe   │ server.py (port 8080)           │
+ │  - shows the Pi's dashboard   │ ────────► │  - serves static/index.html     │
+ │  - live TV window + mute      │           │  - /api/weather /status /calendar│
+ │  - opens built-in TV apps     │           │  - /api/launch → TV websocket   │
+ └───────────────────────────────┘           │  - watcher: TV powers on →      │
+              ▲                              │    launch the Home Dashboard app│
+              └──────── TV remote API ◄──────└─────────────────────────────────┘
+```
+
+- **`pi/`** runs on the Pi as a systemd service. It talks to the TV over Samsung's
+  local remote-control API (port 8002) using [`samsungtvws`](https://github.com/xchwarze/samsung-tv-ws-api).
+- **`tizen-app/`** is a thin TV app. It loads the dashboard from the Pi, so most changes
+  only need `scripts/deploy-pi.sh`, not a reinstall on the TV.
+
+## Pi setup
+
+On your computer, copy `local.env.example` to `local.env` and fill in the Pi's SSH address,
+the TV's IP, the dashboard URL and your certificate profile name. Both scripts read it.
+
+```bash
+# on the Pi, once
+sudo mkdir -p /opt/tv-dashboard && sudo chown pi:pi /opt/tv-dashboard
+python3 -m venv /opt/tv-dashboard/venv
+/opt/tv-dashboard/venv/bin/pip install samsungtvws icalendar recurring-ical-events
+
+# from this repo, on your computer
+scripts/deploy-pi.sh
+
+# on the Pi, once
+sudo systemctl enable tv-dashboard
+```
+
+Then on the Pi:
+
+1. Create `/opt/tv-dashboard/config.local.json` from `pi/config.local.example.json` with your
+   TV IP, dashboard URL, timezone and weather location. Its top-level keys replace those in
+   `pi/config.json`, which holds the shared defaults (app tiles, services shown).
+2. Create `/opt/tv-dashboard/calendars.json` from `pi/calendars.example.json`.
+   Use each Google Calendar's **Settings → Integrate calendar → Secret address in iCal format**.
+   This file contains private links. Both local files are git-ignored, and `deploy-pi.sh`
+   never overwrites them.
+3. The first time the Pi talks to the TV, choose **Allow** on the TV. The pairing token is
+   saved to `/opt/tv-dashboard/tv-token.txt` (also git-ignored).
+
+The service runs as `pi` and reads Plex's token from Plex's own `Preferences.xml` at runtime,
+so no Plex credentials are stored here.
+
+## TV app setup (one time)
+
+1. **Developer Mode:** Home → Apps → enter `1 2 3 4 5` → turn Developer Mode on and set
+   Host PC IP to your computer's IP → hold the power button to restart the TV.
+2. **Tizen Studio CLI:** install from Samsung, then the `Certificate-Manager`, `cert-add-on`,
+   `TV-SAMSUNG-Extension-Tools` and `TV-SAMSUNG-Extension-Resources` packages.
+3. **Certificate:** in Certificate Manager create a *Samsung → TV* profile (needs a Samsung
+   account; the TV's DUID is added automatically when the TV is connected).
+4. Build and install: `scripts/install-tv-app.sh`. It fills in `DASHBOARD_URL` from
+   `local.env`, so your address never lands in the repo.
+
+Certificates live in `~/SamsungCertificate/` and are never part of this repo. Signed
+`.wgt` packages are built in a temp folder and git-ignored.
+
+## Notes and limitations (2019 Q70R)
+
+- Third-party apps can't start themselves at power-on, so the Pi's watcher launches the
+  app when the TV's API reports it turned on.
+- Samsung TV Plus / live TV can't be opened through the remote API (it returns a
+  "server under maintenance" error). The TV app opens `org.tizen.tv-viewer` itself instead.
+- The live preview uses `tizen.tvwindow`. On this model video is drawn **above** all web
+  content, so nothing can overlay it. That's why the preview tile is a card with the label
+  below the video. The TV is muted while the preview is on and unmuted when you leave.
+- Sideloaded apps are signed with a Samsung certificate that eventually expires. Re-run
+  Certificate Manager and `install-tv-app.sh` when that happens.

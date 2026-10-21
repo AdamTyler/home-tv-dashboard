@@ -1,0 +1,111 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Home Dashboard</title>
+<style>
+  /* Transparent so the live TV window (drawn under the web layer) shows through. */
+  html, body { margin: 0; height: 100%; background: transparent; overflow: hidden; }
+  iframe { position: fixed; top: 0; left: 0; width: 100%; height: 100%; border: 0; display: none; background: transparent; }
+  #msg {
+    position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    color: #8b96a3; font: 32px/1.4 "Samsung One", Roboto, Arial, sans-serif; text-align: center;
+  }
+</style>
+</head>
+<body>
+<div id="msg">Connecting to the Pi…</div>
+<iframe id="dash" allow="autoplay" allowtransparency="true"></iframe><script>
+(function () {
+  // Filled in from local.env by scripts/install-tv-app.sh.
+  var DASHBOARD = "__DASHBOARD_URL__";
+  var frame = document.getElementById("dash");
+  var msg = document.getElementById("msg");
+  var previewOn = false;
+  var lastRect = null;
+
+  function send(data) {
+    try { frame.contentWindow.postMessage(data, "*"); } catch (e) {}
+  }
+
+  function setMute(on) {
+    try { tizen.tvaudiocontrol.setMute(on); } catch (e) {}
+  }
+
+  // Live TV preview: show the TV's current channel in a rectangle on screen.
+  function showPreview(r) {
+    lastRect = r;
+    try {
+      tizen.tvwindow.show(function () {
+        previewOn = true;
+        setMute(true);
+      }, function (err) {
+        send({ previewError: err.message });
+      }, [r.x + "px", r.y + "px", r.w + "px", r.h + "px"], "MAIN");
+    } catch (err) {
+      send({ previewError: String(err) });
+    }
+  }
+
+  function hidePreview() {
+    if (!previewOn) return;
+    previewOn = false;
+    try { tizen.tvwindow.hide(function () {}, function () {}, "MAIN"); } catch (e) {}
+    setMute(false);
+  }
+
+  function exitApp() {
+    hidePreview();
+    try { tizen.application.getCurrentApplication().exit(); } catch (e) {}
+  }
+
+  // Messages from the dashboard page: Back key, tile previews, and launches
+  // of built-in TV apps that only an app on the TV itself may open.
+  window.addEventListener("message", function (e) {
+    var d = e.data;
+    if (d === "exit") return exitApp();
+    if (!d) return;
+    if (d.preview) return showPreview(d.preview);
+    if (d.launch) {
+      hidePreview();
+      try {
+        tizen.application.launch(d.launch, null, function (err) {
+          send({ launchError: err.message });
+        });
+      } catch (err) {
+        send({ launchError: String(err) });
+      }
+    }
+  });
+  document.addEventListener("keydown", function (e) {
+    if (e.keyCode === 10009) exitApp();
+  });
+
+  // Leaving the app (another app opens, Home is pressed): stop the preview and unmute.
+  document.addEventListener("visibilitychange", function () {
+    if (document.hidden) hidePreview();
+    else if (lastRect) showPreview(lastRect);
+  });
+  window.addEventListener("unload", hidePreview);
+
+  function load() {
+    var xhr = new XMLHttpRequest();
+    xhr.open("GET", DASHBOARD + "api/apps");
+    xhr.timeout = 5000;
+    xhr.onload = function () {
+      frame.onload = function () { frame.focus(); try { frame.contentWindow.focus(); } catch (e) {} };
+      frame.src = DASHBOARD + "?tvapp=1";
+      frame.style.display = "block";
+      msg.style.display = "none";
+    };
+    xhr.onerror = xhr.ontimeout = function () {
+      msg.textContent = "Can't reach the dashboard at " + DASHBOARD + " — retrying…";
+      setTimeout(load, 5000);
+    };
+    xhr.send();
+  }
+  load();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,28 @@
+# --- Secrets and device-specific files: never commit ---
+# Your own addresses, location, timezone and Claude notes
+local.env
+pi/config.local.json
+CLAUDE.local.md
+# Private Google Calendar iCal links
+pi/calendars.json
+# TV pairing token created on the Pi
+pi/tv-token.txt
+tv-token.txt
+# Signed TV app packages (signed with a personal Samsung certificate)
+*.wgt
+# Samsung / Tizen certificates, keys and signing output
+*.p12
+*.pri
+*.csr
+*.crt
+device-profile.xml
+profiles.xml
+author-signature.xml
+signature*.xml
+
+# --- Build and tooling noise ---
+venv/
+__pycache__/
+*.pyc
+.manifest.tmp
+.DS_Store

@@ -1,0 +1,12 @@
+[
+  {
+    "name": "Personal",
+    "url": "https://calendar.google.com/calendar/ical/YOUR_ADDRESS/private-SECRET/basic.ics",
+    "color": "#1a73e8"
+  },
+  {
+    "name": "US Holidays",
+    "url": "https://calendar.google.com/calendar/ical/en.usa%23holiday%40group.v.calendar.google.com/public/basic.ics",
+    "color": "#0b8043"
+  }
+]

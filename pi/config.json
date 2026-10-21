@@ -1,0 +1,31 @@
+{
+  "tv_ip": "192.168.1.50",
+  "port": 8080,
+  "dashboard_url": "http://raspberrypi.local:8080/",
+  "dashboard_app_id": "HmDash0001.HomeDash",
+  "launch_delay_seconds": 8,
+  "timezone": "UTC",
+  "location": null,
+  "media_mount": "/mnt/library",
+  "services": [
+    {"name": "Plex",         "unit": "plexmediaserver"},
+    {"name": "File sharing", "unit": "smbd"},
+    {"name": "Transmission", "unit": "transmission-daemon"},
+    {"name": "NordVPN",      "unit": "nordvpnd"}
+  ],
+  "apps": [
+    {"name": "Samsung TV Plus", "local": "org.tizen.tv-viewer", "color": "#1c2129", "preview": true},
+    {"name": "Netflix",     "id": "3201907018807", "color": "#b20710"},
+    {"name": "YouTube TV",  "id": "3201707014489", "color": "#cc0000"},
+    {"name": "YouTube",     "id": "111299001912",  "color": "#e62117"},
+    {"name": "Plex",        "id": "3201512006963", "color": "#d39a0b"},
+    {"name": "Prime Video", "id": "3201512006785", "color": "#0f79af"},
+    {"name": "Disney+",     "id": "3201901017640", "color": "#113ccf"},
+    {"name": "Max",         "id": "3202301029760", "color": "#2f1fd1"},
+    {"name": "Hulu",        "id": "3201601007625", "color": "#178a52"},
+    {"name": "Peacock",     "id": "3202006020991", "color": "#333333"},
+    {"name": "Paramount+",  "id": "3201710014981", "color": "#0064ff"},
+    {"name": "Apple TV",    "id": "3201807016597", "color": "#3a3a3c"},
+    {"name": "Spotify",     "id": "3201606009684", "color": "#1a9e4b"}
+  ]
+}

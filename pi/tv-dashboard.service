@@ -1,0 +1,15 @@
+[Unit]
+Description=TV dashboard and Samsung TV power-on watcher
+After=network-online.target plexmediaserver.service
+Wants=network-online.target
+
+[Service]
+User=pi
+Group=pi
+WorkingDirectory=/opt/tv-dashboard
+ExecStart=/opt/tv-dashboard/venv/bin/python -I /opt/tv-dashboard/server.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

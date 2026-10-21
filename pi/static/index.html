@@ -1,0 +1,479 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Home Dashboard</title>
+<style>
+  /* Written for the 2019 Tizen browser: no optional chaining, no flex gap. */
+  :root {
+    --bg: #0d1117;
+    --panel: #161b22;
+    --line: #262d36;
+    --text: #e8edf2;
+    --muted: #8b96a3;
+    --ok: #3fb950;
+    --bad: #f85149;
+    --warn: #d29922;
+    --focus: #ffffff;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Samsung One", "SamsungOne", Roboto, "Helvetica Neue", Arial, sans-serif;
+    font-size: 1.15vw;
+    overflow: hidden;
+  }
+  .wrap {
+    height: 100%;
+    padding: 3vh 3.5vw;
+    display: grid;
+    grid-template-rows: auto 1fr auto;
+    grid-template-columns: 1fr 22vw;
+    grid-row-gap: 3.5vh;
+    grid-column-gap: 2vw;
+  }
+  .top { grid-column: 1 / 3; }
+  .apps { grid-column: 1; grid-row: 2; }
+  .home { grid-column: 1; grid-row: 3; }
+
+  /* Upcoming calendar column (right side, under the weather) */
+  .agenda {
+    grid-column: 2; grid-row: 2 / 4; position: relative; overflow: hidden;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 1vw; padding: 2vh 1.2vw;
+  }
+  .agenda h2 { margin: 0 0 .6vh; font-size: .95vw; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+  .agenda:after { /* fade out events that don't fit */
+    content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 8vh;
+    background: linear-gradient(rgba(22,27,34,0), var(--panel)); border-radius: 0 0 1vw 1vw;
+  }
+  .ag-day { font-size: 1.15vw; font-weight: 600; margin: 1.8vh 0 .8vh; }
+  .ag-day.today { color: #8ab4f8; }
+  .ag-ev { border-radius: .6vw; padding: 1vh .9vw; margin-bottom: .7vh; color: #fff; }
+  .ag-ev .t { font-size: 1.1vw; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ag-ev .w { font-size: .95vw; opacity: .85; margin-top: .3vh; }
+  .ag-ev.allday { padding: .7vh .9vw; }
+  .ag-ev.allday .t { font-size: 1vw; }
+  .ag-now { position: relative; height: .25vh; background: #ea4335; margin: 1vh 0 1vh .6vw; }
+  .ag-now:before {
+    content: ""; position: absolute; left: -.6vw; top: 50%; width: 1vw; height: 1vw;
+    margin-top: -.5vw; border-radius: 50%; background: #ea4335;
+  }
+  .ag-empty { color: var(--muted); font-size: 1vw; }
+  .ag-note { color: var(--muted); font-size: .85vw; margin-top: 1vh; }
+
+  /* Top row: clock + weather */
+  .top { display: grid; grid-template-columns: 1fr auto; align-items: end; }
+  .time { font-size: 7.5vw; font-weight: 300; line-height: 1; letter-spacing: -0.03em; }
+  .date { font-size: 1.9vw; color: var(--muted); margin-top: 1vh; }
+  .wx { display: grid; grid-template-columns: auto auto; grid-column-gap: 3vw; align-items: end; }
+  .wx-now { text-align: right; }
+  .wx-temp { font-size: 4.6vw; font-weight: 300; line-height: 1; }
+  .wx-desc { font-size: 1.4vw; color: var(--muted); margin-top: .6vh; }
+  .wx-days { display: grid; grid-template-columns: repeat(5, 5.2vw); grid-column-gap: .6vw; }
+  .day { background: var(--panel); border: 1px solid var(--line); border-radius: .8vw; padding: 1.2vh 0; text-align: center; }
+  .day .d { color: var(--muted); font-size: 1vw; }
+  .day .i { font-size: 1.9vw; margin: .4vh 0; }
+  .day .t { font-size: 1.05vw; }
+  .day .p { font-size: .85vw; color: #79c0ff; }
+
+  /* Apps */
+  .apps { display: grid; grid-template-columns: repeat(6, 1fr); grid-auto-rows: 1fr; grid-gap: 1.6vw; align-content: center; justify-content: start; }
+  .app {
+    border: 0; border-radius: 1vw; color: #fff; font: inherit;
+    font-size: var(--tile-font, 1.7vw); font-weight: 600; letter-spacing: .01em;
+    line-height: 1.15; padding: 0 .5vw; overflow: hidden;
+    min-height: 14vh; cursor: pointer; outline: none;
+    box-shadow: inset 0 -0.6vh 0 rgba(0,0,0,.25);
+    transition: transform .12s ease-out, box-shadow .12s ease-out;
+  }
+  .app:focus, .app:hover {
+    transform: scale(1.06);
+    box-shadow: 0 0 0 .3vw var(--focus), 0 1.2vh 3vh rgba(0,0,0,.5);
+  }
+  .app.busy { opacity: .6; }
+  .app.preview { grid-column: span 2; }
+
+  /* Inside the TV app, the live TV window shows through a see-through tile. */
+  html.tvapp, html.tvapp body { background: transparent; }
+  /* The TV draws live video above everything on this model, so the preview
+     tile is a card that frames the video, with a label bar underneath it. */
+  .app.preview { position: relative; padding: 0; }
+  html.tvapp .app.preview:focus, html.tvapp .app.preview:hover {
+    transform: none; box-shadow: 0 0 0 .3vw var(--focus);
+  }
+  .app.preview .bar-label {
+    position: absolute; left: 0; right: 0; bottom: 0; height: 18%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: var(--tile-font, 1.5vw);
+  }
+  .app.preview .bar-label i {
+    font-style: normal; font-size: .6em; font-weight: 700; letter-spacing: .1em;
+    background: #e5252a; padding: .15em .5em; border-radius: .3em; margin-right: .6em;
+  }
+
+  /* Home status */
+  .home { display: grid; grid-template-columns: 1.1fr 1.6fr 1.3fr; grid-column-gap: 1.6vw; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 1vw; padding: 2vh 1.4vw; height: 26vh; overflow: hidden; }
+  .card h2 { margin: 0 0 1.4vh; font-size: .95vw; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+  .row { display: grid; grid-template-columns: auto 1fr auto; grid-column-gap: .8vw; align-items: center; padding: .45vh 0; }
+  .dot { width: .75vw; height: .75vw; border-radius: 50%; background: var(--muted); }
+  .dot.ok { background: var(--ok); }
+  .dot.bad { background: var(--bad); }
+  .dot.warn { background: var(--warn); }
+  .val { color: var(--muted); }
+  .playing { margin-bottom: 1.2vh; }
+  .playing .title { font-size: 1.3vw; }
+  .playing .who { color: var(--muted); font-size: .95vw; margin: .3vh 0 .6vh; }
+  .bar { height: .5vh; background: var(--line); border-radius: .25vh; overflow: hidden; }
+  .bar i { display: block; height: 100%; background: #e5a00d; }
+  .recent { margin: 0; padding: 0; list-style: none; }
+  .recent li { padding: .35vh 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .muted { color: var(--muted); }
+
+  .toast {
+    position: fixed; left: 50%; bottom: 5vh; transform: translateX(-50%);
+    background: #fff; color: #000; padding: 1.4vh 2vw; border-radius: 3vh;
+    font-size: 1.3vw; font-weight: 600; opacity: 0; transition: opacity .2s;
+  }
+  .toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <section class="top">
+    <div>
+      <div class="time" id="time">--:--</div>
+      <div class="date" id="date"></div>
+    </div>
+    <div class="wx" id="wx">
+      <div class="wx-days" id="wx-days"></div>
+      <div class="wx-now">
+        <div class="wx-temp" id="wx-temp">--°</div>
+        <div class="wx-desc" id="wx-desc">Loading weather…</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="apps" id="apps"></section>
+
+  <section class="home">
+    <div class="card">
+      <h2>Home server</h2>
+      <div id="services"></div>
+    </div>
+    <div class="card">
+      <h2>Plex</h2>
+      <div id="plex"><span class="muted">Loading…</span></div>
+    </div>
+    <div class="card">
+      <h2>System</h2>
+      <div id="system"></div>
+    </div>
+  </section>
+
+  <section class="agenda">
+    <h2>Upcoming</h2>
+    <div id="agenda"><span class="ag-empty">Loading calendar…</span></div>
+  </section>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var inTvApp = window.parent !== window && location.search.indexOf("tvapp=1") >= 0;
+  if (inTvApp) document.documentElement.className += " tvapp";
+  var DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+  function esc(s) {
+    return String(s == null ? "" : s).replace(/[&<>"]/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c];
+    });
+  }
+  function getJSON(url) {
+    return fetch(url, { cache: "no-store" }).then(function (r) { return r.json(); });
+  }
+  function toast(msg) {
+    var t = $("toast");
+    t.textContent = msg;
+    t.className = "toast show";
+    clearTimeout(toast.timer);
+    toast.timer = setTimeout(function () { t.className = "toast"; }, 3000);
+  }
+
+  // Clock
+  function tick() {
+    var d = new Date();
+    var h = d.getHours() % 12 || 12, m = d.getMinutes();
+    $("time").textContent = h + ":" + (m < 10 ? "0" : "") + m;
+    $("date").textContent = d.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
+  }
+  tick();
+  setInterval(tick, 1000);
+
+  // Weather (WMO codes from Open-Meteo)
+  function wmo(code, isDay) {
+    if (code === 0) return [isDay === 0 ? "🌙" : "☀️", "Clear"];
+    if (code <= 2) return ["⛅", "Partly cloudy"];
+    if (code === 3) return ["☁️", "Cloudy"];
+    if (code <= 48) return ["🌫️", "Fog"];
+    if (code <= 57) return ["🌦️", "Drizzle"];
+    if (code <= 67) return ["🌧️", "Rain"];
+    if (code <= 77) return ["🌨️", "Snow"];
+    if (code <= 82) return ["🌧️", "Showers"];
+    if (code <= 86) return ["🌨️", "Snow showers"];
+    return ["⛈️", "Thunderstorms"];
+  }
+  function loadWeather() {
+    getJSON("/api/weather").then(function (w) {
+      if (w.error === "no-location") {
+        $("wx-desc").textContent = "Set a location in config.json";
+        return;
+      }
+      if (w.error) throw new Error(w.error);
+      var c = w.current, now = wmo(c.weather_code, c.is_day);
+      $("wx-temp").textContent = Math.round(c.temperature_2m) + "°";
+      $("wx-desc").innerHTML = esc(now[0] + " " + now[1]) + "<br>" +
+        esc(w.place + " · feels " + Math.round(c.apparent_temperature) + "° · " + Math.round(c.wind_speed_10m) + " mph");
+      var html = "";
+      for (var i = 0; i < w.daily.time.length; i++) {
+        var day = new Date(w.daily.time[i] + "T12:00:00");
+        var p = w.daily.precipitation_probability_max[i];
+        html += '<div class="day"><div class="d">' + (i === 0 ? "Today" : DAYS[day.getDay()]) + "</div>" +
+          '<div class="i">' + wmo(w.daily.weather_code[i], 1)[0] + "</div>" +
+          '<div class="t">' + Math.round(w.daily.temperature_2m_max[i]) + "° <span class=\"muted\">" +
+          Math.round(w.daily.temperature_2m_min[i]) + "°</span></div>" +
+          '<div class="p">' + (p ? p + "%" : "&nbsp;") + "</div></div>";
+      }
+      $("wx-days").innerHTML = html;
+    }).catch(function () { $("wx-desc").textContent = "Weather unavailable"; });
+  }
+  loadWeather();
+  setInterval(loadWeather, 10 * 60 * 1000);
+
+  // App tiles
+  // Built-in TV apps (like live TV) can only be opened by the TV app wrapper.
+  window.addEventListener("message", function (e) {
+    if (e.data && e.data.launchError) toast("Couldn't open that: " + e.data.launchError);
+    if (e.data && e.data.previewError) toast("Live preview unavailable: " + e.data.previewError);
+  });
+
+  // Tell the TV app where the preview tile is so it can place live TV there.
+  function placePreview() {
+    var tile = document.querySelector(".app.preview");
+    if (!inTvApp || !tile) return;
+    // Fit a 16:9 video in the card above its label bar (bottom 18%),
+    // leaving a small frame of card color around it.
+    var r = tile.getBoundingClientRect(), pad = Math.round(r.width * 0.025);
+    var iw = r.width - 2 * pad, ih = r.height * 0.82 - pad;
+    var w = iw, h = w * 9 / 16;
+    if (h > ih) { h = ih; w = h * 16 / 9; }
+    var rect = {
+      x: Math.round(r.left + (r.width - w) / 2), y: Math.round(r.top + pad),
+      w: Math.round(w), h: Math.round(h)
+    };
+    var key = [rect.x, rect.y, rect.w, rect.h].join(",");
+    if (key === placePreview.last) return;
+    placePreview.last = key;
+    window.parent.postMessage({ preview: rect }, "*");
+  }
+  // The layout shifts as weather and status load in, so keep the video
+  // window lined up with the tile.
+  setInterval(placePreview, 1000);
+
+  function launch(btn, app) {
+    if (app.local) {
+      if (window.parent === window) return toast(app.name + " only opens from the TV app");
+      toast("Opening " + app.name + "…");
+      window.parent.postMessage({ launch: app.local }, "*");
+      return;
+    }
+    btn.className = "app busy";
+    toast("Opening " + app.name + "…");
+    fetch("/api/launch", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: app.id })
+    }).then(function (r) {
+      if (!r.ok) toast("Couldn't open " + app.name);
+    }).catch(function () {
+      toast("Couldn't reach the Pi");
+    }).then(function () { btn.className = "app"; });
+  }
+  // Size tiles so a two-wide tile (2 columns + 1 gap) by one row is exactly
+  // 16:9, using the largest size that fits the space between header and cards.
+  var tileCols = 6;
+  function sizeTiles() {
+    var box = $("apps"), gap = innerWidth * 0.016;
+    box.style.gridTemplateColumns = "repeat(" + tileCols + ", 1fr)";
+    box.style.gridAutoRows = "1fr";
+    var rowH = (box.clientHeight - gap) / 2;
+    var colW = (rowH * 16 / 9 - gap) / 2;
+    var maxColW = (box.clientWidth - (tileCols - 1) * gap) / tileCols;
+    if (colW > maxColW) { colW = maxColW; rowH = (2 * colW + gap) * 9 / 16; }
+    box.style.gridTemplateColumns = "repeat(" + tileCols + ", " + Math.floor(colW) + "px)";
+    box.style.gridAutoRows = Math.floor((2 * Math.floor(colW) + gap) * 9 / 16) + "px";
+    // Labels scale with tile width so names like "Paramount+" fit on one line.
+    box.style.setProperty("--tile-font", Math.min(innerWidth * 0.017, colW * 0.125) + "px");
+  }
+  window.addEventListener("resize", sizeTiles);
+
+  getJSON("/api/apps").then(function (apps) {
+    var box = $("apps");
+    // A preview tile is two cells wide; lay everything out in two rows.
+    var cells = 0;
+    apps.forEach(function (a) { cells += a.preview ? 2 : 1; });
+    tileCols = Math.ceil(cells / 2);
+    sizeTiles();
+    apps.forEach(function (app) {
+      var b = document.createElement("button");
+      b.className = app.preview ? "app preview" : "app";
+      b.style.background = app.color;
+      if (app.preview && inTvApp) {
+        b.innerHTML = '<span class="bar-label"><i>LIVE</i>Samsung TV</span>';
+      } else {
+        b.textContent = app.name;
+      }
+      b.onclick = function () { launch(b, app); };
+      box.appendChild(b);
+    });
+    if (box.firstChild) box.firstChild.focus();
+    setTimeout(placePreview, 300);
+  });
+
+  // Remote arrow keys move between tiles
+  document.addEventListener("keydown", function (e) {
+    // Back on the remote: let the TV app wrapper close itself.
+    if (e.keyCode === 10009 && window.parent !== window) {
+      window.parent.postMessage("exit", "*");
+      return;
+    }
+    var tiles = Array.prototype.slice.call(document.querySelectorAll(".app"));
+    var dir = { 37: "left", 38: "up", 39: "right", 40: "down" }[e.keyCode];
+    if (!dir) return;
+    e.preventDefault();
+    var cur = document.activeElement;
+    if (tiles.indexOf(cur) < 0) { if (tiles[0]) tiles[0].focus(); return; }
+    // Move to the nearest tile in that direction, by on-screen position
+    // (tiles differ in size, so index arithmetic doesn't work).
+    var a = cur.getBoundingClientRect();
+    var ax = a.left + a.width / 2, ay = a.top + a.height / 2;
+    var best = null, bestScore = Infinity;
+    tiles.forEach(function (t) {
+      if (t === cur) return;
+      var b = t.getBoundingClientRect();
+      var bx = b.left + b.width / 2, by = b.top + b.height / 2;
+      var dx = bx - ax, dy = by - ay, along, across;
+      if (dir === "left") { if (b.right > a.left + 1) return; along = -dx; across = Math.abs(dy); }
+      if (dir === "right") { if (b.left < a.right - 1) return; along = dx; across = Math.abs(dy); }
+      if (dir === "up") { if (b.bottom > a.top + 1) return; along = -dy; across = Math.abs(dx); }
+      if (dir === "down") { if (b.top < a.bottom - 1) return; along = dy; across = Math.abs(dx); }
+      var score = along + across * 2;
+      if (score < bestScore) { bestScore = score; best = t; }
+    });
+    if (best) best.focus();
+  });
+
+  // Home status
+  function row(state, label, value) {
+    return '<div class="row"><span class="dot ' + state + '"></span><span>' + esc(label) +
+      '</span><span class="val">' + esc(value || "") + "</span></div>";
+  }
+  function loadStatus() {
+    getJSON("/api/status").then(function (s) {
+      var html = "";
+      s.services.forEach(function (svc) {
+        var value = svc.ok ? "Running" : "Stopped";
+        var state = svc.ok ? "ok" : "bad";
+        if (svc.name === "NordVPN" && svc.ok) {
+          var connected = s.vpn.state === "Connected";
+          value = connected ? "Connected" + (s.vpn.country ? " · " + s.vpn.country : "") : "Not connected";
+          state = connected ? "ok" : "warn";
+        }
+        html += row(state, svc.name, value);
+      });
+      $("services").innerHTML = html;
+
+      var p = s.plex, ph = "";
+      if (p.error) {
+        ph = '<span class="muted">Plex unavailable</span>';
+      } else {
+        p.playing.forEach(function (m) {
+          ph += '<div class="playing"><div class="title">▶ ' + esc(m.title) + "</div>" +
+            '<div class="who">' + esc(m.user + " · " + m.device) + "</div>" +
+            '<div class="bar"><i style="width:' + m.progress + '%"></i></div></div>';
+        });
+        if (!p.playing.length) ph += '<div class="muted" style="margin-bottom:1.2vh">Nothing playing</div>';
+        if (p.recent.length) {
+          ph += '<div class="muted" style="font-size:.9vw;margin-bottom:.4vh">Recently added</div><ul class="recent">';
+          p.recent.slice(0, p.playing.length ? 2 : 5).forEach(function (t) { ph += "<li>" + esc(t) + "</li>"; });
+          ph += "</ul>";
+        }
+      }
+      $("plex").innerHTML = ph;
+
+      var sys = "";
+      if (s.drive) {
+        var pct = s.drive.free_gb / s.drive.total_gb;
+        sys += row(pct < 0.1 ? "bad" : pct < 0.2 ? "warn" : "ok", "Media drive",
+          (s.drive.free_gb / 1024).toFixed(1) + " TB free");
+      } else {
+        sys += row("bad", "Media drive", "Not mounted");
+      }
+      sys += row(s.pi.temp_f > 175 ? "bad" : s.pi.temp_f > 155 ? "warn" : "ok", "Pi temperature", s.pi.temp_f + "°F");
+      sys += row(s.pi.load > 3 ? "warn" : "ok", "Pi load", String(s.pi.load));
+      $("system").innerHTML = sys;
+    }).catch(function () {
+      $("services").innerHTML = row("bad", "Pi", "Unreachable");
+    });
+  }
+  loadStatus();
+  setInterval(loadStatus, 15000);
+
+  // Upcoming calendar events, grouped by day like Google Calendar's agenda
+  var MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  function dayLabel(iso) {
+    var p = iso.split("-"), d = new Date(+p[0], +p[1] - 1, +p[2]);
+    return DAYS[d.getDay()] + ", " + MONTHS[d.getMonth()] + " " + d.getDate();
+  }
+  function eventHtml(ev) {
+    return '<div class="ag-ev' + (ev.allDay ? " allday" : "") + '" style="background:' + esc(ev.color) + '">' +
+      '<div class="t">' + esc(ev.title) + "</div>" +
+      (ev.allDay ? "" : '<div class="w">' + esc(ev.when) + "</div>") + "</div>";
+  }
+  function loadCalendar() {
+    getJSON("/api/calendar").then(function (c) {
+      var days = {}, order = [];
+      c.events.forEach(function (ev) {
+        if (!days[ev.date]) { days[ev.date] = []; order.push(ev.date); }
+        days[ev.date].push(ev);
+      });
+      if (!days[c.today]) { days[c.today] = []; order.unshift(c.today); }
+      var html = "";
+      order.forEach(function (d) {
+        var isToday = d === c.today;
+        html += '<div class="ag-day' + (isToday ? " today" : "") + '">' + dayLabel(d) + "</div>";
+        var nowShown = false;
+        days[d].forEach(function (ev) {
+          // Red "now" line goes before today's first event that hasn't started yet.
+          if (isToday && !nowShown && !ev.allDay && !ev.now) { html += '<div class="ag-now"></div>'; nowShown = true; }
+          html += eventHtml(ev);
+        });
+        if (isToday && !nowShown) html += '<div class="ag-now"></div>';
+        if (isToday && !days[d].length) html += '<div class="ag-empty">Nothing else today</div>';
+      });
+      if (c.errors && c.errors.length) html += '<div class="ag-note">Couldn\'t load: ' + esc(c.errors.join(", ")) + "</div>";
+      $("agenda").innerHTML = html;
+    }).catch(function () {
+      $("agenda").innerHTML = '<span class="ag-empty">Calendar unavailable</span>';
+    });
+  }
+  loadCalendar();
+  setInterval(loadCalendar, 5 * 60 * 1000);
+})();
+</script>
+</body>
+</html>
