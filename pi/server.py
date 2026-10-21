@@ -6,17 +6,15 @@
 - Watches the TV's power state and opens the dashboard app whenever the TV
   turns on.
 """
+import importlib.util
 import json
 import logging
 import os
 import re
-import shutil
-import subprocess
 import threading
 import time
 import urllib.parse
 import urllib.request
-import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from zoneinfo import ZoneInfo
@@ -30,8 +28,6 @@ CONFIG_PATH = os.path.join(HERE, "config.json")
 # Your own values (TV/Pi addresses, location, timezone, ...) go here.
 # It's git-ignored and its top-level keys replace those in config.json.
 LOCAL_CONFIG_PATH = os.path.join(HERE, "config.local.json")
-PLEX_PREFS = os.path.expanduser(
-    "~/Library/Application Support/Plex Media Server/Preferences.xml")
 
 logging.basicConfig(level=logging.INFO,
                     format="%(asctime)s %(levelname)s %(message)s")
@@ -50,8 +46,6 @@ def load_config():
 
 
 CFG = load_config()
-MEDIA_MOUNT = CFG.get("media_mount", "/mnt/library")
-SERVICES = [(s["name"], s["unit"]) for s in CFG.get("services", [])]
 
 
 # --- TV control ---------------------------------------------------------
@@ -205,76 +199,48 @@ def calendar_events():
     return data
 
 
-# --- Home status --------------------------------------------------------
+# --- Widgets ------------------------------------------------------------
+# Each widget is a folder in pi/widgets/<type>/ with:
+#   widget.py   data(options) -> dict   (runs here, on the Pi)
+#   widget.js   Dashboard.register("<type>", {render: ...})   (runs on the TV)
+#   widget.css  optional styles
+# config.json "widgets" lists which ones the dashboard shows, in order.
 
-def plex_get(path):
-    token = ET.parse(PLEX_PREFS).getroot().get("PlexOnlineToken", "")
-    req = urllib.request.Request(
-        "http://127.0.0.1:32400" + path,
-        headers={"Accept": "application/json", "X-Plex-Token": token})
-    with urllib.request.urlopen(req, timeout=5) as r:
-        return json.load(r).get("MediaContainer", {})
+WIDGETS_DIR = os.path.join(HERE, "widgets")
+WIDGET_TYPE = re.compile(r"^[a-z0-9-]+$")
+_widget_modules = {}
 
 
-def plex_summary():
-    out = {"playing": [], "recent": []}
-    try:
-        for m in plex_get("/status/sessions").get("Metadata", []):
-            title = m.get("title", "")
-            if m.get("grandparentTitle"):
-                title = "%s – %s" % (m["grandparentTitle"], title)
-            dur = m.get("duration") or 0
-            out["playing"].append({
-                "title": title,
-                "user": (m.get("User") or {}).get("title", ""),
-                "device": (m.get("Player") or {}).get("title", ""),
-                "progress": round(100 * m.get("viewOffset", 0) / dur) if dur else 0,
-            })
-        recent = plex_get("/library/recentlyAdded?X-Plex-Container-Start=0"
-                          "&X-Plex-Container-Size=6")
-        for m in recent.get("Metadata", []):
-            title = m.get("title", "")
-            if m.get("type") == "season":
-                title = "%s – %s" % (m.get("parentTitle", ""), title)
-            out["recent"].append(title)
-    except Exception as e:
-        out["error"] = str(e)
+def widget_module(kind):
+    """Load (once) the widget.py for a widget type."""
+    if kind not in _widget_modules:
+        path = os.path.join(WIDGETS_DIR, kind, "widget.py")
+        if not WIDGET_TYPE.match(kind) or not os.path.isfile(path):
+            raise KeyError("unknown widget type: %s" % kind)
+        spec = importlib.util.spec_from_file_location("widget_" + kind.replace("-", "_"), path)
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        _widget_modules[kind] = mod
+    return _widget_modules[kind]
+
+
+def widget_list():
+    """What the dashboard needs to lay out and mount each configured widget.
+
+    Only "display" settings go to the TV; "options" stay on the Pi (they may
+    hold things like API keys) and are only passed to widget.py.
+    """
+    out = []
+    for w in CFG.get("widgets", []):
+        out.append({"type": w["type"], "title": w.get("title", w["type"]),
+                    "width": w.get("width", 1), "refresh": w.get("refresh", 15),
+                    "display": w.get("display", {})})
     return out
 
 
-def vpn_summary():
-    try:
-        text = subprocess.run(["nordvpn", "status"], capture_output=True,
-                              text=True, timeout=5).stdout
-    except Exception:
-        return {"state": "unknown"}
-    state = re.search(r"Status:\s*(\w+)", text)
-    country = re.search(r"Country:\s*(.+)", text)
-    return {"state": state.group(1) if state else "unknown",
-            "country": country.group(1).strip() if country else ""}
-
-
-def status():
-    services = []
-    for label, unit in SERVICES:
-        r = subprocess.run(["systemctl", "is-active", unit],
-                           capture_output=True, text=True)
-        services.append({"name": label, "ok": r.stdout.strip() == "active"})
-    try:
-        du = shutil.disk_usage(MEDIA_MOUNT)
-        drive = {"free_gb": du.free // 2**30, "total_gb": du.total // 2**30}
-    except OSError:
-        drive = None
-    with open("/sys/class/thermal/thermal_zone0/temp") as f:
-        temp_c = int(f.read()) / 1000
-    return {
-        "services": services,
-        "vpn": vpn_summary(),
-        "drive": drive,
-        "pi": {"temp_f": round(temp_c * 9 / 5 + 32),
-               "load": round(os.getloadavg()[0], 2)},
-        "plex": plex_summary(),
-    }
+def widget_data(index):
+    w = CFG.get("widgets", [])[index]
+    return widget_module(w["type"]).data(w.get("options", {}))
 
 
 # --- HTTP ---------------------------------------------------------------
@@ -286,6 +252,13 @@ class Handler(SimpleHTTPRequestHandler):
     def log_message(self, fmt, *args):
         pass
 
+    def end_headers(self):
+        # The TV's browser caches aggressively; make it revalidate every file
+        # so deploys show up without reinstalling the app.
+        if not self.path.startswith("/api/"):
+            self.send_header("Cache-Control", "no-cache")
+        super().end_headers()
+
     def send_json(self, obj, code=200):
         body = json.dumps(obj).encode()
         self.send_response(code)
@@ -295,16 +268,39 @@ class Handler(SimpleHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def send_widget_file(self, kind, name):
+        path = os.path.join(WIDGETS_DIR, kind, name)
+        if not os.path.isfile(path):
+            # widget.css is optional
+            body, code = b"", (200 if name.endswith(".css") else 404)
+        else:
+            with open(path, "rb") as f:
+                body, code = f.read(), 200
+        self.send_response(code)
+        self.send_header("Content-Type", "text/css" if name.endswith(".css")
+                         else "application/javascript")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
     def do_GET(self):
         try:
             if self.path == "/api/weather":
                 return self.send_json(weather())
-            if self.path == "/api/status":
-                return self.send_json(status())
+            if self.path == "/api/widgets":
+                return self.send_json(widget_list())
+            m = re.match(r"^/api/widget/(\d+)$", self.path)
+            if m:
+                return self.send_json(widget_data(int(m.group(1))))
+            m = re.match(r"^/widgets/([a-z0-9-]+)/(widget\.(?:js|css))$", self.path)
+            if m:
+                return self.send_widget_file(m.group(1), m.group(2))
             if self.path == "/api/calendar":
                 return self.send_json(calendar_events())
             if self.path == "/api/apps":
                 return self.send_json(CFG["apps"])
+        except (KeyError, IndexError) as e:
+            return self.send_json({"error": "not found: %s" % e}, 404)
         except Exception as e:
             log.warning("%s failed: %s", self.path, e)
             return self.send_json({"error": str(e)}, 500)
@@ -326,8 +322,8 @@ class Handler(SimpleHTTPRequestHandler):
             if self.path == "/api/open-dashboard":
                 open_dashboard()
                 return self.send_json({"ok": True})
-        except StopIteration:
-            return self.send_json({"error": "unknown app"}, 404)
+        except (StopIteration, KeyError, IndexError):
+            return self.send_json({"error": "not found"}, 404)
         except Exception as e:
             log.warning("%s failed: %s", self.path, e)
             return self.send_json({"error": str(e)}, 500)

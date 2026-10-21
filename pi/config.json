@@ -6,12 +6,18 @@
   "launch_delay_seconds": 8,
   "timezone": "UTC",
   "location": null,
-  "media_mount": "/mnt/library",
-  "services": [
-    {"name": "Plex",         "unit": "plexmediaserver"},
-    {"name": "File sharing", "unit": "smbd"},
-    {"name": "Transmission", "unit": "transmission-daemon"},
-    {"name": "NordVPN",      "unit": "nordvpnd"}
+  "widgets": [
+    {"type": "home-server", "title": "Home server", "width": 1.1, "refresh": 15,
+     "options": {"services": [
+       {"name": "Plex",         "unit": "plexmediaserver"},
+       {"name": "File sharing", "unit": "smbd"},
+       {"name": "Transmission", "unit": "transmission-daemon"},
+       {"name": "NordVPN",      "unit": "nordvpnd", "check": "nordvpn"}
+     ]}},
+    {"type": "plex", "title": "Plex", "width": 1.6, "refresh": 15},
+    {"type": "system", "title": "System", "width": 1.3, "refresh": 30,
+     "options": {"drives": [{"name": "Media drive", "path": "/mnt/library"}],
+                 "temperature_unit": "F"}}
   ],
   "apps": [
     {"name": "Samsung TV Plus", "local": "org.tizen.tv-viewer", "color": "#1c2129", "preview": true},

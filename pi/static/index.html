@@ -115,7 +115,8 @@
   }
 
   /* Home status */
-  .home { display: grid; grid-template-columns: 1.1fr 1.6fr 1.3fr; grid-column-gap: 1.6vw; }
+  /* Bottom row of widgets; columns are set from each widget's "width". */
+  .home { display: grid; grid-template-columns: 1fr; grid-column-gap: 1.6vw; }
   .card { background: var(--panel); border: 1px solid var(--line); border-radius: 1vw; padding: 2vh 1.4vw; height: 26vh; overflow: hidden; }
   .card h2 { margin: 0 0 1.4vh; font-size: .95vw; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
   .row { display: grid; grid-template-columns: auto 1fr auto; grid-column-gap: .8vw; align-items: center; padding: .45vh 0; }
@@ -124,13 +125,6 @@
   .dot.bad { background: var(--bad); }
   .dot.warn { background: var(--warn); }
   .val { color: var(--muted); }
-  .playing { margin-bottom: 1.2vh; }
-  .playing .title { font-size: 1.3vw; }
-  .playing .who { color: var(--muted); font-size: .95vw; margin: .3vh 0 .6vh; }
-  .bar { height: .5vh; background: var(--line); border-radius: .25vh; overflow: hidden; }
-  .bar i { display: block; height: 100%; background: #e5a00d; }
-  .recent { margin: 0; padding: 0; list-style: none; }
-  .recent li { padding: .35vh 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .muted { color: var(--muted); }
 
   .toast {
@@ -159,20 +153,8 @@
 
   <section class="apps" id="apps"></section>
 
-  <section class="home">
-    <div class="card">
-      <h2>Home server</h2>
-      <div id="services"></div>
-    </div>
-    <div class="card">
-      <h2>Plex</h2>
-      <div id="plex"><span class="muted">Loading…</span></div>
-    </div>
-    <div class="card">
-      <h2>System</h2>
-      <div id="system"></div>
-    </div>
-  </section>
+  <!-- Filled from config.json "widgets"; each comes from pi/widgets/<type>/ -->
+  <section class="home" id="widgets"></section>
 
   <section class="agenda">
     <h2>Upcoming</h2>
@@ -377,61 +359,63 @@
     if (best) best.focus();
   });
 
-  // Home status
+  // Widgets (bottom row). Each type lives in pi/widgets/<type>/ and its
+  // widget.js calls Dashboard.register(type, {render: function (el, data, display) {}}).
   function row(state, label, value) {
     return '<div class="row"><span class="dot ' + state + '"></span><span>' + esc(label) +
       '</span><span class="val">' + esc(value || "") + "</span></div>";
   }
-  function loadStatus() {
-    getJSON("/api/status").then(function (s) {
-      var html = "";
-      s.services.forEach(function (svc) {
-        var value = svc.ok ? "Running" : "Stopped";
-        var state = svc.ok ? "ok" : "bad";
-        if (svc.name === "NordVPN" && svc.ok) {
-          var connected = s.vpn.state === "Connected";
-          value = connected ? "Connected" + (s.vpn.country ? " · " + s.vpn.country : "") : "Not connected";
-          state = connected ? "ok" : "warn";
-        }
-        html += row(state, svc.name, value);
-      });
-      $("services").innerHTML = html;
+  var Dashboard = window.Dashboard = {
+    types: {},
+    register: function (type, def) { this.types[type] = def; },
+    esc: esc,
+    row: row  // status row: row("ok" | "warn" | "bad", label, value)
+  };
 
-      var p = s.plex, ph = "";
-      if (p.error) {
-        ph = '<span class="muted">Plex unavailable</span>';
-      } else {
-        p.playing.forEach(function (m) {
-          ph += '<div class="playing"><div class="title">▶ ' + esc(m.title) + "</div>" +
-            '<div class="who">' + esc(m.user + " · " + m.device) + "</div>" +
-            '<div class="bar"><i style="width:' + m.progress + '%"></i></div></div>';
-        });
-        if (!p.playing.length) ph += '<div class="muted" style="margin-bottom:1.2vh">Nothing playing</div>';
-        if (p.recent.length) {
-          ph += '<div class="muted" style="font-size:.9vw;margin-bottom:.4vh">Recently added</div><ul class="recent">';
-          p.recent.slice(0, p.playing.length ? 2 : 5).forEach(function (t) { ph += "<li>" + esc(t) + "</li>"; });
-          ph += "</ul>";
-        }
-      }
-      $("plex").innerHTML = ph;
-
-      var sys = "";
-      if (s.drive) {
-        var pct = s.drive.free_gb / s.drive.total_gb;
-        sys += row(pct < 0.1 ? "bad" : pct < 0.2 ? "warn" : "ok", "Media drive",
-          (s.drive.free_gb / 1024).toFixed(1) + " TB free");
-      } else {
-        sys += row("bad", "Media drive", "Not mounted");
-      }
-      sys += row(s.pi.temp_f > 175 ? "bad" : s.pi.temp_f > 155 ? "warn" : "ok", "Pi temperature", s.pi.temp_f + "°F");
-      sys += row(s.pi.load > 3 ? "warn" : "ok", "Pi load", String(s.pi.load));
-      $("system").innerHTML = sys;
-    }).catch(function () {
-      $("services").innerHTML = row("bad", "Pi", "Unreachable");
+  function loadAsset(tag, attrs) {
+    return new Promise(function (resolve) {
+      var el = document.createElement(tag);
+      for (var k in attrs) el[k] = attrs[k];
+      el.onload = el.onerror = function () { resolve(); };
+      document.head.appendChild(el);
     });
   }
-  loadStatus();
-  setInterval(loadStatus, 15000);
+
+  function mountWidget(w, index, box) {
+    var card = document.createElement("div");
+    card.className = "card widget widget-" + w.type;
+    card.innerHTML = "<h2>" + esc(w.title) + "</h2><div></div>";
+    box.appendChild(card);
+    var body = card.lastChild, def = Dashboard.types[w.type];
+    if (!def) {
+      body.innerHTML = '<span class="muted">Unknown widget: ' + esc(w.type) + "</span>";
+      return;
+    }
+    function refresh() {
+      getJSON("/api/widget/" + index).then(function (data) {
+        def.render(body, data, w.display || {});
+      }).catch(function () {
+        body.innerHTML = row("bad", w.title, "Unavailable");
+      });
+    }
+    refresh();
+    setInterval(refresh, (w.refresh || 15) * 1000);
+  }
+
+  getJSON("/api/widgets").then(function (list) {
+    var box = $("widgets"), loads = [], seen = {};
+    box.style.gridTemplateColumns = list.map(function (w) { return w.width + "fr"; }).join(" ");
+    list.forEach(function (w) {
+      if (seen[w.type]) return;
+      seen[w.type] = true;
+      var base = "/widgets/" + w.type + "/widget.";
+      loads.push(loadAsset("link", { rel: "stylesheet", href: base + "css" }));
+      loads.push(loadAsset("script", { src: base + "js" }));
+    });
+    return Promise.all(loads).then(function () {
+      list.forEach(function (w, i) { mountWidget(w, i, box); });
+    });
+  });
 
   // Upcoming calendar events, grouped by day like Google Calendar's agenda
   var MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];

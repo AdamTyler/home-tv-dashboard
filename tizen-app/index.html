@@ -94,7 +94,8 @@
     xhr.timeout = 5000;
     xhr.onload = function () {
       frame.onload = function () { frame.focus(); try { frame.contentWindow.focus(); } catch (e) {} };
-      frame.src = DASHBOARD + "?tvapp=1";
+      // Timestamp so the TV never shows a stale cached copy after a deploy.
+      frame.src = DASHBOARD + "?tvapp=1&t=" + Date.now();
       frame.style.display = "block";
       msg.style.display = "none";
     };

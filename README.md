@@ -7,7 +7,8 @@ When the TV turns on, the Pi opens the dashboard automatically.
 - App tiles that launch Netflix, YouTube TV, Plex and the rest on the TV
 - A live Samsung TV preview tile that opens live TV / Samsung TV Plus
 - An **Upcoming** column from Google Calendar (private iCal links) plus US holidays
-- Home server status: Plex now playing and recently added, Samba, Transmission, NordVPN, media drive, Pi health
+- A row of configurable **widgets**; included: home server services, Plex now playing and
+  recently added, and system health. [Write your own](pi/widgets/README.md).
 
 ## How it fits together
 

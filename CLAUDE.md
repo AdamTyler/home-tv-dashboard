@@ -19,6 +19,9 @@ small sideloaded Tizen app on the TV displays it.
     top-level keys replace those in `config.json` (TV IP, dashboard URL, timezone, location)
   - `calendars.example.json`: template for the Pi-only `calendars.json` (private iCal links)
   - `static/index.html`: the dashboard page (also works in a normal browser)
+  - `widgets/<type>/`: bottom-row widgets (`widget.py` data on the Pi, `widget.js` render on
+    the TV, optional `widget.css`), listed in config `"widgets"`. See `pi/widgets/README.md`.
+    Current: `home-server`, `plex`, `system`.
   - `tv-dashboard.service`: systemd unit (User=pi, venv python)
 - `tizen-app/`: the TV app (`HmDash0001.HomeDash`), an iframe wrapper around the Pi page.
   Its `index.html` has a `__DASHBOARD_URL__` placeholder filled in at build time.
@@ -42,10 +45,14 @@ small sideloaded Tizen app on the TV displays it.
   `tizen.tvwindow.show(..., "MAIN")` and mutes via `tizen.tvaudiocontrol`. It hides and unmutes on
   `visibilitychange`, on exit, and before launching another app.
 - **Back key** (10009): the page posts `"exit"` to the wrapper, which exits the app.
-- **APIs:** `/api/weather` (Open-Meteo, cached 10 min), `/api/status` (systemctl states from the
-  `services` config, `nordvpn status`, `media_mount` free space, Pi temp/load, Plex sessions +
-  recently added using the token read from Plex's Preferences.xml), `/api/calendar` (iCal feeds via
-  `icalendar` + `recurring-ical-events`, 45 days, cached 10 min), `/api/apps`, `/api/log` (debug).
+- **APIs:** `/api/weather` (Open-Meteo, cached 10 min), `/api/calendar` (iCal feeds via
+  `icalendar` + `recurring-ical-events`, 45 days, cached 10 min), `/api/apps`, `/api/log` (debug),
+  `/api/widgets` (widget list without `options`), `/api/widget/<index>` (that widget's `data()`),
+  `/widgets/<type>/widget.js|css` (served from `pi/widgets/`).
+- **Widgets:** the page fetches `/api/widgets`, loads each type's JS/CSS once, then mounts one card
+  per entry and polls `/api/widget/<i>` every `refresh` seconds. Widget `options` stay on the Pi
+  (safe for API keys); only `display` reaches the TV. The Plex widget reads its token from Plex's
+  Preferences.xml at runtime.
 - **Layout:** `sizeTiles()` computes column width so a 2-wide tile is exactly 16:9 and fits the
   space; labels scale via `--tile-font`. Arrow keys use position-based nearest-tile navigation.
 

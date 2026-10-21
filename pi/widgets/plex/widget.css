@@ -1,0 +1,9 @@
+.plex-playing { margin-bottom: 1.2vh; }
+.plex-playing .title { font-size: 1.3vw; }
+.plex-playing .who { color: var(--muted); font-size: .95vw; margin: .3vh 0 .6vh; }
+.plex-bar { height: .5vh; background: var(--line); border-radius: .25vh; overflow: hidden; }
+.plex-bar i { display: block; height: 100%; background: #e5a00d; }
+.plex-idle { margin-bottom: 1.2vh; }
+.plex-label { font-size: .9vw; margin-bottom: .4vh; }
+.plex-recent { margin: 0; padding: 0; list-style: none; }
+.plex-recent li { padding: .35vh 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
