@@ -1,7 +1,7 @@
 """System widget: free space on drives plus the Pi's temperature and load.
 
 options:
-  drives: [{"name": "Media drive", "path": "/mnt/library"}]
+  drives: [{"name": "Media drive", "path": "/mnt/media"}]
   temperature_unit: "F" or "C" (default "F")
 """
 import os

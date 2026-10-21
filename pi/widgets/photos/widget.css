@@ -1,0 +1,13 @@
+/* Photos fill the whole card, edge to edge. */
+.widget-photos { display: flex; flex-direction: column; padding: 0; }
+.photos-stage { flex: 1; position: relative; overflow: hidden; background: #000; }
+.photos-img {
+  position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+  object-fit: cover; opacity: 0; transition: opacity 1.5s ease-in-out;
+}
+.photos-img.show { opacity: 1; }
+.photos-empty {
+  display: none; position: absolute; top: 50%; left: 0; right: 0; transform: translateY(-50%);
+  padding: 0 2vw; text-align: center; color: var(--muted); font-size: 1vw; line-height: 1.5;
+}
+.photos-empty b { color: var(--text); font-weight: 600; }

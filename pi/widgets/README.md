@@ -33,13 +33,23 @@ Add it to `"widgets"` in `pi/config.json`, or in the Pi's `config.local.json` to
 | `options` | Passed to `widget.py` only. **Never sent to the TV**, so secrets and API keys belong here |
 | `display` | Passed to `render()` on the TV, for presentation-only settings |
 
+To keep a widget's options private (paths, API keys), put them in the Pi's git-ignored
+`config.local.json` under `"widget_options"`, keyed by type. They're merged over the
+widget's `options`:
+
+```json
+"widget_options": {"photos": {"folder": "/mnt/usb-drive/Photos"}}
+```
+
 The same type can appear more than once with different options. `config.json` parks widgets
 that aren't shown under `"_unused_widgets"`, so you can swap them back in.
 
 Included: `home-server`, `plex`, `system`, `logo` (an SVG with a slow color shift;
 `display.src` and `display.seconds`), and `logo-3d` (the logo extruded and rotating in WebGL
 with a bundled Three.js r128, the last version that runs on the TV's engine; `display.seconds`,
-`display.depth`, `display.fallback` for a flat logo when WebGL isn't available).
+`display.depth`, `display.fallback` for a flat logo when WebGL isn't available), and `photos`
+(a crossfading slideshow of a folder on the Pi, filled from Google Photos with a pick page;
+see the main README).
 
 To screenshot a widget, open `http://<pi>:8080/?demo=1`. It shows sample data from
 `pi/static/demo.json`; add a sample entry for your widget type there.
@@ -55,6 +65,16 @@ def data(options):
 Raise or return `{"error": "..."}` on failure. The server calls `data()` each time the TV asks
 (every `refresh` seconds), so cache anything slow or rate-limited yourself.
 
+A widget can also serve its own URLs under `/api/widget/<index>/...` by defining:
+
+```python
+def route(options, method, subpath, query, body):
+    # Return a dict/list (JSON), (content_type, bytes), (content_type, bytes, status), or None (404).
+```
+
+In `render()`, the fourth argument `ctx.base` is that prefix (for example `/api/widget/1`).
+`photos` uses this for resized images and its pick page.
+
 ## widget.js
 
 The TV runs an old browser engine (Tizen 5.0): **no optional chaining, `??`, flex `gap` or
@@ -62,7 +82,7 @@ The TV runs an old browser engine (Tizen 5.0): **no optional chaining, `??`, fle
 
 ```js
 Dashboard.register("my-widget", {
-  render: function (el, data, display) {
+  render: function (el, data, display, ctx) {
     el.innerHTML = data.rows.map(function (r) {
       return Dashboard.row(r.state, r.name, r.value);  // "ok" | "warn" | "bad"
     }).join("");

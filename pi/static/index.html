@@ -446,9 +446,11 @@
       body.innerHTML = '<span class="muted">Unknown widget: ' + esc(w.type) + "</span>";
       return;
     }
+    // ctx.base is where this widget's own routes live (widget.py route()).
+    var ctx = { base: "/api/widget/" + index };
     function refresh() {
       getJSON("/api/widget/" + index).then(function (data) {
-        def.render(body, data, w.display || {});
+        def.render(body, data, w.display || {}, ctx);
       }).catch(function () {
         body.innerHTML = row("bad", w.title, "Unavailable");
       });

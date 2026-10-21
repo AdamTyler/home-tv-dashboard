@@ -5,6 +5,12 @@ pi/config.local.json
 CLAUDE.local.md
 # Private Google Calendar iCal links
 pi/calendars.json
+# Google sign-in for the photos widget, and Google's OAuth client file
+google-photos.json
+client_secret*.json
+# Photos and the resized photo cache on the Pi
+cache/
+pi/photos/
 # TV pairing token created on the Pi
 pi/tv-token.txt
 tv-token.txt

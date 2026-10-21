@@ -2,5 +2,8 @@
   "tv_ip": "192.168.1.50",
   "dashboard_url": "http://192.168.1.20:8080/",
   "timezone": "America/New_York",
-  "location": {"name": "Your City", "lat": 40.7128, "lon": -74.006}
+  "location": {"name": "Your City", "lat": 40.7128, "lon": -74.006},
+  "widget_options": {
+    "photos": {"folder": "/mnt/usb-drive/Photos"}
+  }
 }

@@ -80,6 +80,29 @@ so no Plex credentials are stored here.
 Certificates live in `~/SamsungCertificate/` and are never part of this repo. Signed
 `.wgt` packages are built in a temp folder and git-ignored.
 
+## Google Photos slideshow (optional)
+
+The `photos` widget shows random photos from a folder on the Pi. Since March 2025 Google only
+lets apps read photos you pick, so the Pi has a pick page that copies chosen photos from Google
+Photos into that folder. You can also drop photos into the folder yourself.
+
+1. Pi: `/opt/tv-dashboard/venv/bin/pip install pillow` (used to resize photos for the TV), and
+   set your folder in `config.local.json`: `"widget_options": {"photos": {"folder": "/path/to/Photos"}}`.
+2. In [Google Cloud Console](https://console.cloud.google.com): create a project, enable the
+   **Photos Picker API**, set up **Google Auth Platform** (External; add yourself as a test user),
+   add the `photospicker.mediaitems.readonly` scope under Data Access, and create a
+   **Desktop app** OAuth client. Download its JSON.
+3. On your computer: `/usr/bin/python3 scripts/google-photos-auth.py client_secret_*.json`,
+   then copy the resulting `google-photos.json` to `/opt/tv-dashboard/` on the Pi. Both files
+   are git-ignored. (On macOS, `/usr/bin/python3` uses the system's certificates; a python.org
+   install may fail with `CERTIFICATE_VERIFY_FAILED`.)
+4. On your phone, open `http://<pi>:8080/api/widget/<index>/pick`, where `<index>` is the
+   widget's position in `"widgets"`, starting at 0. Tap **Choose photos**, pick, and the Pi
+   downloads them.
+
+While the Google app is in Testing mode, the sign-in expires after 7 days. Photos already on the
+Pi keep showing; re-run step 3 before picking more.
+
 ## Third-party code
 
 `pi/widgets/logo-3d/three-r128.js` is [Three.js](https://threejs.org) r128 (MIT license,

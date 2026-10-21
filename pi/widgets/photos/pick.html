@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Add photos to the TV</title>
+<style>
+  :root { color-scheme: dark; }
+  body { margin: 0; background: #0d1117; color: #e8edf2; font: 17px/1.5 -apple-system, Roboto, Arial, sans-serif; }
+  main { max-width: 440px; margin: 0 auto; padding: 40px 20px; }
+  h1 { font-size: 24px; margin: 0 0 8px; }
+  p { color: #8b96a3; margin: 0 0 24px; }
+  button, a.btn {
+    display: block; width: 100%; box-sizing: border-box; padding: 16px; border: 0; border-radius: 12px;
+    background: #1a73e8; color: #fff; font: 600 17px/1.2 inherit; text-align: center; text-decoration: none;
+  }
+  button:disabled { opacity: .5; }
+  #status { margin-top: 24px; min-height: 3em; }
+  .bar { height: 8px; background: #262d36; border-radius: 4px; overflow: hidden; margin-top: 10px; }
+  .bar i { display: block; height: 100%; width: 0; background: #3fb950; transition: width .3s; }
+  .err { color: #f85149; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Add photos to the TV</h1>
+  <p>Choose photos in Google Photos and they'll be copied to the Pi for the dashboard slideshow.</p>
+  <button id="start">Choose photos</button>
+  <div id="status"></div>
+</main>
+<script>
+  var btn = document.getElementById("start"), status = document.getElementById("status");
+  var polling = null;
+
+  function show(s) {
+    if (s.state === "waiting") {
+      status.innerHTML = 'Pick your photos in Google Photos, then tap <b>Done</b>. ' +
+        'If it didn\'t open, <a href="' + s.pickerUri + '" target="_blank" style="color:#8ab4f8">open it here</a>.';
+    } else if (s.state === "downloading") {
+      var pct = s.total ? Math.round(100 * s.done / s.total) : 0;
+      status.innerHTML = "Copying " + s.done + " of " + s.total + " photos to the Pi…" +
+        '<div class="bar"><i style="width:' + pct + '%"></i></div>';
+    } else if (s.state === "done") {
+      status.innerHTML = "Done! The slideshow now has " + s.photos + " photos.";
+    } else if (s.state === "expired") {
+      status.innerHTML = "The picker timed out. Tap Choose photos to try again.";
+    } else if (s.state === "error") {
+      status.innerHTML = '<span class="err">' + (s.error || "Something went wrong") + "</span>";
+    } else {
+      status.textContent = s.photos ? "The slideshow has " + s.photos + " photos." : "";
+    }
+    var busy = s.state === "waiting" || s.state === "downloading";
+    btn.disabled = busy;
+    if (!busy && polling) { clearInterval(polling); polling = null; }
+    if (busy && !polling) polling = setInterval(poll, 2000);
+  }
+  function poll() {
+    fetch("pick/status", { cache: "no-store" }).then(function (r) { return r.json(); }).then(show);
+  }
+
+  btn.onclick = function () {
+    btn.disabled = true;
+    // Open the window now (inside the tap) so phones don't block it as a popup.
+    var win = window.open("", "_blank");
+    fetch("pick/start", { method: "POST", body: "{}" }).then(function (r) { return r.json(); }).then(function (s) {
+      if (s.pickerUri) {
+        // "/autoclose" closes Google's window once the photos are picked.
+        if (win) win.location = s.pickerUri + "/autoclose"; else location.href = s.pickerUri;
+      } else if (win) {
+        win.close();
+      }
+      show(s);
+    });
+  };
+  poll();
+</script>
+</body>
+</html>

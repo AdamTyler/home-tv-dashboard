@@ -21,8 +21,14 @@ small sideloaded Tizen app on the TV displays it.
   - `static/index.html`: the dashboard page (also works in a normal browser)
   - `widgets/<type>/`: bottom-row widgets (`widget.py` data on the Pi, `widget.js` render on
     the TV, optional `widget.css`), listed in config `"widgets"`. See `pi/widgets/README.md`.
-    Current: `home-server`, `plex`, `logo-3d` (Three.js r128 vendored as `three-r128.js`; newer
-    Three.js needs syntax the TV can't run), parked in `_unused_widgets`: `system`, `logo` (flat).
+    Current: `home-server`, `photos`, `logo-3d` (Three.js r128 vendored as `three-r128.js`; newer
+    Three.js needs syntax the TV can't run), parked in `_unused_widgets`: `plex`, `system`, `logo`.
+    Widgets may define `route()` for URLs under `/api/widget/<i>/`; `render()` gets `ctx.base`.
+    Private per-widget options: `config.local.json` `"widget_options": {"<type>": {...}}`.
+  - `photos`: slideshow of a folder (Pillow-resized copies cached in `cache/photos/`), filled via
+    the Google Photos **Picker API** (full-library read access ended March 2025). OAuth uses a
+    Desktop client and loopback sign-in on the Mac (`scripts/google-photos-auth.py`); the device
+    flow doesn't allow the picker scope. Credentials: `google-photos.json` on the Pi (git-ignored).
   - `static/demo.json`: sample data for `?demo=1` (weather, calendar, widgets), used for
     `docs/screenshot.png` (headless Chrome at 1920x1080). Never screenshot real data for the repo.
   - `tv-dashboard.service`: systemd unit (User=pi, venv python)

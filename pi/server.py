@@ -238,11 +238,34 @@ def widget_list():
     return out
 
 
+def widget_options(w):
+    """A widget's options, with private overrides from config.local.json:
+    "widget_options": {"<type>": {...}} is merged over the widget's "options".
+    """
+    options = dict(w.get("options", {}))
+    options.update(CFG.get("widget_options", {}).get(w["type"], {}))
+    return options
+
+
 def widget_data(index):
     w = CFG.get("widgets", [])[index]
     if not os.path.isfile(os.path.join(WIDGETS_DIR, w["type"], "widget.py")):
         return {}  # display-only widget (no data from the Pi)
-    return widget_module(w["type"]).data(w.get("options", {}))
+    return widget_module(w["type"]).data(widget_options(w))
+
+
+def widget_route(index, method, subpath, query, body):
+    """Extra URLs a widget serves under /api/widget/<index>/<subpath>.
+
+    widget.py may define route(options, method, subpath, query, body) returning
+    a dict/list (sent as JSON), (content_type, bytes) or (content_type, bytes,
+    status), or None for 404.
+    """
+    w = CFG.get("widgets", [])[index]
+    mod = widget_module(w["type"])
+    if not hasattr(mod, "route"):
+        return None
+    return mod.route(widget_options(w), method, subpath, query, body)
 
 
 # --- HTTP ---------------------------------------------------------------
@@ -289,8 +312,34 @@ class Handler(SimpleHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def send_route_result(self, result):
+        if result is None:
+            return self.send_json({"error": "not found"}, 404)
+        if isinstance(result, (dict, list)):
+            return self.send_json(result)
+        ctype, body = result[0], result[1]
+        code = result[2] if len(result) > 2 else 200
+        self.send_response(code)
+        self.send_header("Content-Type", ctype)
+        if ctype.startswith("image/"):
+            self.send_header("Cache-Control", "max-age=86400")  # images never change
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def try_widget_route(self, method, body=None):
+        url = urllib.parse.urlsplit(self.path)
+        m = re.match(r"^/api/widget/(\d+)/([A-Za-z0-9_./-]+)$", url.path)
+        if not m or ".." in m.group(2):
+            return False
+        query = dict(urllib.parse.parse_qsl(url.query))
+        self.send_route_result(widget_route(int(m.group(1)), method, m.group(2), query, body))
+        return True
+
     def do_GET(self):
         try:
+            if self.try_widget_route("GET"):
+                return
             if self.path == "/api/weather":
                 return self.send_json(weather())
             if self.path == "/api/widgets":
@@ -317,6 +366,8 @@ class Handler(SimpleHTTPRequestHandler):
         length = int(self.headers.get("Content-Length") or 0)
         body = json.loads(self.rfile.read(length) or b"{}")
         try:
+            if self.try_widget_route("POST", body):
+                return
             if self.path == "/api/launch":
                 app = next(a for a in CFG["apps"]
                            if a.get("id") and a["id"] == body.get("id"))
