@@ -109,6 +109,10 @@
     display: flex; align-items: center; justify-content: center;
     font-size: var(--tile-font, 1.5vw);
   }
+  .demo-video {
+    position: absolute;
+    background: linear-gradient(#4f86d1, #a9c9ee 52%, #4c8a3f 52%, #2f5f2a);
+  }
   .app.preview .bar-label i {
     font-style: normal; font-size: .6em; font-weight: 700; letter-spacing: .1em;
     background: #e5252a; padding: .15em .5em; border-radius: .3em; margin-right: .6em;
@@ -175,9 +179,52 @@
       return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c];
     });
   }
-  function getJSON(url) {
+  function fetchJSON(url) {
     return fetch(url, { cache: "no-store" }).then(function (r) { return r.json(); });
   }
+
+  // ?demo=1 swaps personal data (weather, calendar, widgets) for the sample
+  // data in demo.json, for screenshots. Layout, tiles and widget list stay real.
+  var demo = location.search.indexOf("demo=1") >= 0;
+  var demoData = null, widgetTypes = [];
+  function isoDay(offset) {
+    var d = new Date();
+    d.setDate(d.getDate() + offset);
+    return d.getFullYear() + "-" + ("0" + (d.getMonth() + 1)).slice(-2) + "-" + ("0" + d.getDate()).slice(-2);
+  }
+  function demoResponse(url, d) {
+    if (url === "/api/weather") {
+      var w = d.weather;
+      return { place: w.place, current: w.current, daily: {
+        time: w.daily.map(function (x, i) { return isoDay(i); }),
+        weather_code: w.daily.map(function (x) { return x.code; }),
+        temperature_2m_max: w.daily.map(function (x) { return x.max; }),
+        temperature_2m_min: w.daily.map(function (x) { return x.min; }),
+        precipitation_probability_max: w.daily.map(function (x) { return x.rain; })
+      } };
+    }
+    if (url === "/api/calendar") {
+      return { today: isoDay(0), errors: [], events: d.calendar.map(function (e) {
+        return { date: isoDay(e.day), title: e.title, when: e.when, color: e.color, allDay: !!e.allDay };
+      }) };
+    }
+    var m = url.match(/^\/api\/widget\/(\d+)$/);
+    if (m) return d.widgets[widgetTypes[+m[1]]] || {};
+    return null;
+  }
+  function getJSON(url) {
+    if (!demo) return fetchJSON(url);
+    return (demoData ? Promise.resolve(demoData) : fetchJSON("/demo.json")).then(function (d) {
+      demoData = d;
+      var fake = demoResponse(url, d);
+      if (fake) return fake;
+      return fetchJSON(url).then(function (real) {
+        if (url === "/api/widgets") widgetTypes = real.map(function (w) { return w.type; });
+        return real;
+      });
+    });
+  }
+  if (demo) document.documentElement.className += " demo";
   function toast(msg) {
     var t = $("toast");
     t.textContent = msg;
@@ -246,7 +293,7 @@
   // Tell the TV app where the preview tile is so it can place live TV there.
   function placePreview() {
     var tile = document.querySelector(".app.preview");
-    if (!inTvApp || !tile) return;
+    if ((!inTvApp && !demo) || !tile) return;
     // Fit a 16:9 video in the card above its label bar (bottom 18%),
     // leaving a small frame of card color around it.
     var r = tile.getBoundingClientRect(), pad = Math.round(r.width * 0.025);
@@ -257,8 +304,15 @@
       x: Math.round(r.left + (r.width - w) / 2), y: Math.round(r.top + pad),
       w: Math.round(w), h: Math.round(h)
     };
+    var fake = tile.querySelector(".demo-video");
+    if (fake) {  // demo mode: stand-in picture where live TV would play
+      fake.style.left = (rect.x - r.left) + "px";
+      fake.style.top = (rect.y - r.top) + "px";
+      fake.style.width = rect.w + "px";
+      fake.style.height = rect.h + "px";
+    }
     var key = [rect.x, rect.y, rect.w, rect.h].join(",");
-    if (key === placePreview.last) return;
+    if (key === placePreview.last || !inTvApp) return;
     placePreview.last = key;
     window.parent.postMessage({ preview: rect }, "*");
   }
@@ -314,8 +368,9 @@
       var b = document.createElement("button");
       b.className = app.preview ? "app preview" : "app";
       b.style.background = app.color;
-      if (app.preview && inTvApp) {
-        b.innerHTML = '<span class="bar-label"><i>LIVE</i>Samsung TV</span>';
+      if (app.preview && (inTvApp || demo)) {
+        b.innerHTML = '<span class="bar-label"><i>LIVE</i>Samsung TV</span>' +
+          (demo ? '<span class="demo-video"></span>' : "");
       } else {
         b.textContent = app.name;
       }
@@ -384,7 +439,7 @@
   function mountWidget(w, index, box) {
     var card = document.createElement("div");
     card.className = "card widget widget-" + w.type;
-    card.innerHTML = "<h2>" + esc(w.title) + "</h2><div></div>";
+    card.innerHTML = (w.title ? "<h2>" + esc(w.title) + "</h2>" : "") + "<div></div>";
     box.appendChild(card);
     var body = card.lastChild, def = Dashboard.types[w.type];
     if (!def) {
@@ -399,7 +454,7 @@
       });
     }
     refresh();
-    setInterval(refresh, (w.refresh || 15) * 1000);
+    if (w.refresh > 0) setInterval(refresh, w.refresh * 1000);  // 0 = load once
   }
 
   getJSON("/api/widgets").then(function (list) {

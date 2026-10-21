@@ -4,12 +4,14 @@ The bottom row of the dashboard is built from widgets. Each widget is a folder h
 
 ```
 pi/widgets/<type>/
-  widget.py    data(options) -> dict        runs on the Pi
+  widget.py    data(options) -> dict        runs on the Pi (optional)
   widget.js    Dashboard.register(...)      runs on the TV
   widget.css   optional styles              runs on the TV
+  *.svg|png|jpg|webp                        optional images, served at /widgets/<type>/<file>
 ```
 
-`<type>` is lowercase letters, digits and dashes (for example `home-server`).
+`<type>` is lowercase letters, digits and dashes (for example `home-server`). A widget without
+`widget.py` is display-only and gets `{}` as its data; see `logo/`.
 
 ## Showing a widget
 
@@ -25,13 +27,20 @@ Add it to `"widgets"` in `pi/config.json`, or in the Pi's `config.local.json` to
 | Key | Meaning |
 |---|---|
 | `type` | Folder name in `pi/widgets/` |
-| `title` | Card heading |
+| `title` | Card heading; `""` hides it |
 | `width` | Relative width in the row (fr units) |
-| `refresh` | Seconds between data refreshes (default 15) |
+| `refresh` | Seconds between data refreshes (default 15); `0` loads once |
 | `options` | Passed to `widget.py` only. **Never sent to the TV**, so secrets and API keys belong here |
 | `display` | Passed to `render()` on the TV, for presentation-only settings |
 
-The same type can appear more than once with different options.
+The same type can appear more than once with different options. `config.json` parks widgets
+that aren't shown under `"_unused_widgets"`, so you can swap them back in.
+
+Included: `home-server`, `plex`, `system`, and `logo` (an SVG with a slow color shift;
+`display.src` and `display.seconds`).
+
+To screenshot a widget, open `http://<pi>:8080/?demo=1`. It shows sample data from
+`pi/static/demo.json`; add a sample entry for your widget type there.
 
 ## widget.py
 

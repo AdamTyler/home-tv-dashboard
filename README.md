@@ -3,6 +3,10 @@
 A home screen for a 2019 Samsung QN75Q70R (Tizen 5.0), served from a Raspberry Pi.
 When the TV turns on, the Pi opens the dashboard automatically.
 
+![Dashboard with sample data](docs/screenshot.png)
+
+<sub>Sample data from demo mode (`http://<pi>:8080/?demo=1`). On the TV, the left tile plays live TV.</sub>
+
 - Clock, date and a 5-day forecast (Open-Meteo, no API key)
 - App tiles that launch Netflix, YouTube TV, Plex and the rest on the TV
 - A live Samsung TV preview tile that opens live TV / Samsung TV Plus

@@ -21,7 +21,9 @@ small sideloaded Tizen app on the TV displays it.
   - `static/index.html`: the dashboard page (also works in a normal browser)
   - `widgets/<type>/`: bottom-row widgets (`widget.py` data on the Pi, `widget.js` render on
     the TV, optional `widget.css`), listed in config `"widgets"`. See `pi/widgets/README.md`.
-    Current: `home-server`, `plex`, `system`.
+    Current: `home-server`, `plex`, `system` (parked in `_unused_widgets`), `logo` (display-only).
+  - `static/demo.json`: sample data for `?demo=1` (weather, calendar, widgets), used for
+    `docs/screenshot.png` (headless Chrome at 1920x1080). Never screenshot real data for the repo.
   - `tv-dashboard.service`: systemd unit (User=pi, venv python)
 - `tizen-app/`: the TV app (`HmDash0001.HomeDash`), an iframe wrapper around the Pi page.
   Its `index.html` has a `__DASHBOARD_URL__` placeholder filled in at build time.

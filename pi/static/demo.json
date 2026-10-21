@@ -1,0 +1,42 @@
+{
+  "_comment": "Sample data for screenshots: open the dashboard with ?demo=1. Days are offsets from today.",
+  "weather": {
+    "place": "Springfield",
+    "current": {"temperature_2m": 72, "apparent_temperature": 70, "weather_code": 1,
+                "wind_speed_10m": 6, "relative_humidity_2m": 45, "is_day": 1},
+    "daily": [
+      {"code": 1,  "max": 76, "min": 58, "rain": 0},
+      {"code": 3,  "max": 74, "min": 60, "rain": 10},
+      {"code": 61, "max": 68, "min": 57, "rain": 70},
+      {"code": 2,  "max": 71, "min": 55, "rain": 5},
+      {"code": 0,  "max": 75, "min": 56, "rain": 0}
+    ]
+  },
+  "calendar": [
+    {"day": 0, "title": "Grocery pickup", "when": "5 – 5:30pm", "color": "#1a73e8"},
+    {"day": 0, "title": "Movie night", "when": "8 – 10pm", "color": "#8e24aa"},
+    {"day": 1, "title": "Dentist", "when": "9:30 – 10:30am", "color": "#1a73e8"},
+    {"day": 2, "title": "Soccer practice", "when": "4 – 5:30pm", "color": "#f4511e"},
+    {"day": 4, "title": "Grandma's birthday", "allDay": true, "color": "#1a73e8"},
+    {"day": 5, "title": "Farmers market", "when": "9 – 11am", "color": "#1a73e8"},
+    {"day": 8, "title": "Book club", "when": "7 – 8:30pm", "color": "#8e24aa"},
+    {"day": 10, "title": "Holiday", "allDay": true, "color": "#0b8043"}
+  ],
+  "widgets": {
+    "home-server": {"services": [
+      {"name": "Plex", "state": "ok", "value": "Running"},
+      {"name": "File sharing", "state": "ok", "value": "Running"},
+      {"name": "Downloads", "state": "ok", "value": "Running"},
+      {"name": "VPN", "state": "warn", "value": "Not connected"}
+    ]},
+    "plex": {
+      "playing": [{"title": "Nature Doc – The Coast", "user": "Living room", "device": "TV", "progress": 42}],
+      "recent": ["Space Adventure", "The Big Bake Off – Season 3", "Mountain Rescue"]
+    },
+    "system": {"rows": [
+      {"name": "Media drive", "state": "ok", "value": "2.1 TB free"},
+      {"name": "Pi temperature", "state": "ok", "value": "128°F"},
+      {"name": "Pi load", "state": "ok", "value": "0.24"}
+    ]}
+  }
+}

@@ -1,0 +1,26 @@
+/* The card body fills the card so the logo can be centered in it. */
+.widget-logo { display: flex; flex-direction: column; }
+.logo-stage { flex: 1; display: flex; align-items: center; justify-content: center; }
+
+/* The logo is a mask over a moving gradient; the hue also drifts slowly. */
+.logo-mark {
+  width: 80%; height: 80%;
+  -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;
+  -webkit-mask-position: center; mask-position: center;
+  -webkit-mask-size: contain; mask-size: contain;
+  background: linear-gradient(135deg, #4f8cff, #a855f7, #ff5d8f, #ffb347, #4f8cff);
+  background-size: 400% 400%;
+  animation-name: logo-drift, logo-hue;
+  animation-timing-function: ease-in-out, linear;
+  animation-iteration-count: infinite, infinite;
+  animation-direction: alternate, normal;
+  will-change: background-position, filter;
+}
+@keyframes logo-drift {
+  from { background-position: 0% 50%; }
+  to   { background-position: 100% 50%; }
+}
+@keyframes logo-hue {
+  from { filter: hue-rotate(0deg); }
+  to   { filter: hue-rotate(360deg); }
+}

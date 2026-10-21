@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2000 1729">
+  <!-- Outer triangle, minus the slash + inner hole, minus the bottom gap. -->
+  <path fill-rule="evenodd" d="
+    M0 1728 L997 0 L1999 1728 L1662 1728 L1607 1728 Z
+    M803 336 L1092 834 L849 836 L752 1004 L1241 1004 L829 290 Z
+    M502 1437 L585 1293 L1412 1297 L1662 1728 L1607 1728 L1440 1437 Z"/>
+</svg>

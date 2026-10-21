@@ -240,6 +240,8 @@ def widget_list():
 
 def widget_data(index):
     w = CFG.get("widgets", [])[index]
+    if not os.path.isfile(os.path.join(WIDGETS_DIR, w["type"], "widget.py")):
+        return {}  # display-only widget (no data from the Pi)
     return widget_module(w["type"]).data(w.get("options", {}))
 
 
@@ -268,17 +270,21 @@ class Handler(SimpleHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    WIDGET_FILE_TYPES = {"js": "application/javascript", "css": "text/css",
+                         "svg": "image/svg+xml", "png": "image/png",
+                         "jpg": "image/jpeg", "webp": "image/webp"}
+
     def send_widget_file(self, kind, name):
+        """Serve a widget's front-end files (never widget.py)."""
         path = os.path.join(WIDGETS_DIR, kind, name)
         if not os.path.isfile(path):
             # widget.css is optional
-            body, code = b"", (200 if name.endswith(".css") else 404)
+            body, code = b"", (200 if name == "widget.css" else 404)
         else:
             with open(path, "rb") as f:
                 body, code = f.read(), 200
         self.send_response(code)
-        self.send_header("Content-Type", "text/css" if name.endswith(".css")
-                         else "application/javascript")
+        self.send_header("Content-Type", self.WIDGET_FILE_TYPES[name.rsplit(".", 1)[1]])
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
@@ -292,7 +298,8 @@ class Handler(SimpleHTTPRequestHandler):
             m = re.match(r"^/api/widget/(\d+)$", self.path)
             if m:
                 return self.send_json(widget_data(int(m.group(1))))
-            m = re.match(r"^/widgets/([a-z0-9-]+)/(widget\.(?:js|css))$", self.path)
+            m = re.match(r"^/widgets/([a-z0-9-]+)/([A-Za-z0-9_-]+\.(?:js|css|svg|png|jpg|webp))$",
+                         self.path)
             if m:
                 return self.send_widget_file(m.group(1), m.group(2))
             if self.path == "/api/calendar":
