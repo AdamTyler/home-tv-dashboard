@@ -99,7 +99,8 @@
     document.getElementById("albums").style.display = "block";
     document.getElementById("album-list").innerHTML = a.albums.map(function (x) {
       var detail = x.error ? '<span class="err">' + esc(x.error) + "</span>"
-        : x.photos + " photos" + (x.added ? " · " + x.added + " new last sync" : "");
+        : x.photos + " photos" + (x.videos ? " · " + x.videos + " videos skipped" : "") +
+          (x.added ? " · " + x.added + " new last sync" : "");
       return "<li>" + esc(x.name || "Album") + "<small>" + detail + "</small></li>";
     }).join("") || "<li><small>Not synced yet.</small></li>";
     var syncing = a.state === "syncing";

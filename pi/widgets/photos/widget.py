@@ -81,12 +81,63 @@ def _scan(options):
         return by_id
 
 
+_shapes = {"loaded": False, "by_path": {}}  # path -> [mtime, portrait]
+_shapes_lock = threading.Lock()
+
+
+def _is_portrait(path):
+    """Taller than wide, as displayed (EXIF orientations 5-8 rotate 90°).
+    Reads only the image header; results are cached on disk."""
+    if Image is None:
+        return False
+    mtime = os.path.getmtime(path)
+    cached = _shapes["by_path"].get(path)
+    if cached and cached[0] == mtime:
+        return cached[1]
+    with Image.open(path) as im:
+        w, h = im.size
+        try:
+            if im.getexif().get(0x0112) in (5, 6, 7, 8):
+                w, h = h, w
+        except Exception:
+            pass
+    _shapes["by_path"][path] = [mtime, h > w]
+    return h > w
+
+
+def _portraits(ids, by_id):
+    shapes_file = os.path.join(CACHE, "shapes.json")
+    with _shapes_lock:
+        if not _shapes["loaded"]:
+            try:
+                with open(shapes_file) as f:
+                    _shapes["by_path"] = json.load(f)
+            except (OSError, ValueError):
+                pass
+            _shapes["loaded"] = True
+        before = len(_shapes["by_path"])
+        portrait = []
+        for i in ids:
+            try:
+                if _is_portrait(by_id[i]):
+                    portrait.append(i)
+            except Exception:
+                pass
+        if len(_shapes["by_path"]) != before:
+            os.makedirs(CACHE, exist_ok=True)
+            with open(shapes_file + ".tmp", "w") as f:
+                json.dump(_shapes["by_path"], f)
+            os.replace(shapes_file + ".tmp", shapes_file)
+    return portrait
+
+
 def data(options):
     _start_album_scheduler(options)
     by_id = _scan(options)
     ids = list(by_id)
     random.shuffle(ids)
-    return {"photos": ids[:300], "count": len(ids)}
+    ids = ids[:options.get("max_photos", 2000)]  # keeps the list (and shape checks) bounded
+    return {"photos": ids, "portrait": _portraits(ids, by_id), "count": len(by_id)}
 
 
 def _resized(options, photo_id, small=False):
@@ -227,6 +278,8 @@ def _start_pick(options):
 # hundred), but it keeps whole albums in sync without picking.
 
 ALBUM_PHOTO = re.compile(r'\["(https://lh3\.googleusercontent\.com/pw/[A-Za-z0-9_-]+)",\d+,\d+')
+ALBUM_ITEM = re.compile(r'\["AF1Qip[A-Za-z0-9_-]+",\["(https://lh3\.googleusercontent\.com/pw/[A-Za-z0-9_-]+)",\d+,\d+')
+VIDEO_MARK = '"76647426":'
 ALBUM_TITLE = re.compile(r'<meta property="og:title" content="([^"]*)"')
 BROWSER_UA = ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
               "(KHTML, like Gecko) Chrome/124.0 Safari/537.36")
@@ -245,14 +298,25 @@ def _album_page(url):
     req = urllib.request.Request(url, headers={"User-Agent": BROWSER_UA})
     with urllib.request.urlopen(req, timeout=30) as r:
         page = r.read().decode("utf-8", "replace")
-    urls = []
-    for m in ALBUM_PHOTO.finditer(page):
-        if m.group(1) not in urls:
-            urls.append(m.group(1))
+    # Each item looks like ["AF1Qip…",["https://lh3…/pw/…",w,h,…],…]. Videos carry
+    # an extra "76647426": [duration_ms, …, width, height, …] entry; their lh3
+    # URL is just a still frame, so they're skipped.
+    photos, videos = [], []
+    items = list(ALBUM_ITEM.finditer(page))
+    for n, m in enumerate(items):
+        end = items[n + 1].start() if n + 1 < len(items) else len(page)
+        chunk = page[m.start():min(end, m.start() + 4000)]
+        bucket = videos if VIDEO_MARK in chunk else photos
+        if m.group(1) not in bucket:
+            bucket.append(m.group(1))
+    if not items:  # page format changed; fall back to every photo-like URL
+        for m in ALBUM_PHOTO.finditer(page):
+            if m.group(1) not in photos:
+                photos.append(m.group(1))
     title = ALBUM_TITLE.search(page)
     # Titles look like "Name · Nov 14, 2022 – Dec 1, 2024 📸"; keep the name.
     name = html.unescape(title.group(1)).split(" - Google Photos")[0].split(" · ")[0] if title else ""
-    return name.strip(), urls
+    return name.strip(), photos, videos
 
 
 def _sync_albums(options):
@@ -262,14 +326,21 @@ def _sync_albums(options):
         _albums.update(state="syncing", error=None)
         results = []
         for album in options.get("albums", []):
-            info = {"name": album.get("name", ""), "photos": 0, "added": 0, "error": None}
+            info = {"name": album.get("name", ""), "photos": 0, "added": 0, "videos": 0, "error": None}
             try:
-                title, urls = _album_page(album["url"])
+                title, urls, videos = _album_page(album["url"])
                 info["name"] = info["name"] or title or "Album"
                 safe = re.sub(r"[^\w .&'-]", "", info["name"]).strip() or "Album"
                 dest = os.path.join(_folder(options), "Albums", safe)
                 os.makedirs(dest, exist_ok=True)
-                info["photos"] = len(urls)
+                info["photos"], info["videos"] = len(urls), len(videos)
+                # Earlier syncs saved video frames as photos; move any we can now
+                # recognise into a hidden folder the slideshow ignores.
+                for url in videos:
+                    frame = hashlib.sha1(url.encode()).hexdigest()[:16] + ".jpg"
+                    if os.path.exists(os.path.join(dest, frame)):
+                        os.makedirs(os.path.join(dest, ".videos"), exist_ok=True)
+                        os.replace(os.path.join(dest, frame), os.path.join(dest, ".videos", frame))
                 for url in urls:
                     target = os.path.join(dest, hashlib.sha1(url.encode()).hexdigest()[:16] + ".jpg")
                     if os.path.exists(target):

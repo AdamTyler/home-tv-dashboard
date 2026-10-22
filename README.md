@@ -106,7 +106,8 @@ Pi keep showing; re-run step 3 before picking more.
 The picker can't select a whole album (search for the album's name and select its photos
 instead). To keep **whole albums in sync**, share them by link and list them in `config.local.json`:
 `"widget_options": {"photos": {"albums": [{"url": "https://photos.app.goo.gl/..."}]}}`. The Pi
-re-checks every 6 hours (`album_sync_hours`) and copies new photos to `Albums/<name>/`. This is
+re-checks every 6 hours (`album_sync_hours`) and copies new photos to `Albums/<name>/`, skipping
+videos. Portrait photos are shown two at a time, side by side. This is
 **unofficial**: it reads Google's public album page, covers only the first batch of photos it
 lists (often a few hundred), and may stop working if Google changes that page. Anyone with an
 album link can view the album, so keep links out of the repo.

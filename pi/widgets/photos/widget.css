@@ -14,7 +14,16 @@
   opacity: 0; transition: opacity 1.5s ease-in-out;
 }
 .photos-layer.show { opacity: 1; }
-.photos-layer img { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+
+/* Each layer has two slots: one photo uses the first slot full width; a pair of
+   portraits splits the layer in half with a thin divider. */
+.photos-slot { position: absolute; top: 0; bottom: 0; left: 0; width: 100%; overflow: hidden; }
+.photos-slot + .photos-slot { display: none; }
+.photos-layer.pair .photos-slot { width: 50%; }
+.photos-layer.pair .photos-slot + .photos-slot {
+  display: block; left: 50%; border-left: .25vw solid #000;
+}
+.photos-slot img { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
 
 .photos-fg { object-fit: contain; }
 .photos-bg {
@@ -24,6 +33,13 @@
 }
 .photos-fit-blur .photos-bg { display: block; }
 .photos-fit-cover .photos-fg { object-fit: cover; }
+
+/* Pairs follow pair_fit instead. When cropping, keep more of the top, where
+   faces usually are in portrait photos. */
+.photos-stage .photos-layer.pair .photos-bg { display: none; }
+.photos-stage .photos-layer.pair .photos-fg { object-fit: contain; }
+.photos-pairfit-blur .photos-layer.pair .photos-bg { display: block; }
+.photos-pairfit-cover .photos-layer.pair .photos-fg { object-fit: cover; object-position: 50% 30%; }
 
 .photos-empty {
   display: none; position: absolute; top: 50%; left: 0; right: 0; transform: translateY(-50%);

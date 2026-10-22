@@ -24,6 +24,13 @@ small sideloaded Tizen app on the TV displays it.
     Current: `ecobee`, `photos`, `logo-3d` (Three.js r128 vendored as `three-r128.js`; newer
     Three.js needs syntax the TV can't run), parked in `_unused_widgets`: `home-server`, `plex`,
     `system`, `logo`.
+  - `logo-3d`: the outline is one simple polygon (`OUTLINE`, SVG coords; the slash and bottom gap are
+    channels cut from the edge, so no holes) extruded with `ExtrudeGeometry`. The TV's WebGL ignores
+    `antialias`, so it renders at `setPixelRatio(display.supersample || 2)` to smooth edges. Tilt is
+    a fixed rotation on a parent `Group` (if it varies with the spin, one corner swings out of the
+    card). Scale is found by binary search so the outline's front/back points, projected at 36 spin
+    angles, stay within `display.margin` (0.88) of the card; call `camera.updateMatrixWorld()`
+    before projecting or every size fails and the logo is invisible. Camera: fov 18 at z 7000.
   - `ecobee`: reads thermostats + room sensors over HomeKit with `aiohomekit` (ecobee closed its
     developer API to new keys in 2024). A background thread holds one asyncio loop, polls
     `list_accessories_and_characteristics()` every `poll_seconds`, and caches it; aid 1 is the
@@ -43,7 +50,15 @@ small sideloaded Tizen app on the TV displays it.
     Shared-album sync (unofficial): parses `lh3.googleusercontent.com/pw/...` URLs from the public
     album page. `photos.app.goo.gl` short links must be resolved **without** a browser User-Agent
     (browsers get a JS page; other clients get a 302 to `share/...?key=`), then the album page is
-    fetched **with** one. Links without `?key=` return 404.
+    fetched **with** one. Links without `?key=` return 404. Each album item is
+    `["AF1Qip…",["https://lh3…/pw/…",w,h,…],…]`; **videos** carry an extra `"76647426": [duration_ms,
+    …]` entry and are skipped (their lh3 URL is only a still frame). Frames saved by earlier syncs
+    are moved to `Albums/<name>/.videos/` (dot-folders are ignored by the slideshow) as later
+    syncs recognise them. The page lists a different batch of a large album on each fetch.
+  - `photos` pairing: the Pi sends every photo id (up to `max_photos`, 2000) plus which are portrait
+    (header-only check incl. EXIF rotation, cached in `cache/photos/shapes.json`); the TV keeps the
+    portrait set across refreshes. `fit` applies to single photos, `pair_fit` (default `cover`,
+    biased to the top 30%) to halves of a pair.
   - `static/demo.json`: sample data for `?demo=1` (weather, calendar, widgets), used for
     `docs/screenshot.png` (headless Chrome at 1920x1080). Never screenshot real data for the repo.
   - `tv-dashboard.service`: systemd unit (User=pi, venv python)

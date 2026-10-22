@@ -10,7 +10,7 @@
   "widgets": [
     {"type": "ecobee", "title": "Climate", "width": 1.1, "refresh": 30},
     {"type": "photos", "title": "", "width": 1.6, "refresh": 60,
-     "display": {"seconds": 12}},
+     "display": {"seconds": 30, "pair_fit": "cover"}},
     {"type": "logo-3d", "title": "", "width": 1.3, "refresh": 0,
      "display": {"seconds": 16, "depth": 260, "fallback": "/widgets/logo/logo.svg"}}
   ],
