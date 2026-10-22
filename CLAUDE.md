@@ -21,8 +21,19 @@ small sideloaded Tizen app on the TV displays it.
   - `static/index.html`: the dashboard page (also works in a normal browser)
   - `widgets/<type>/`: bottom-row widgets (`widget.py` data on the Pi, `widget.js` render on
     the TV, optional `widget.css`), listed in config `"widgets"`. See `pi/widgets/README.md`.
-    Current: `home-server`, `photos`, `logo-3d` (Three.js r128 vendored as `three-r128.js`; newer
-    Three.js needs syntax the TV can't run), parked in `_unused_widgets`: `plex`, `system`, `logo`.
+    Current: `ecobee`, `photos`, `logo-3d` (Three.js r128 vendored as `three-r128.js`; newer
+    Three.js needs syntax the TV can't run), parked in `_unused_widgets`: `home-server`, `plex`,
+    `system`, `logo`.
+  - `ecobee`: reads thermostats + room sensors over HomeKit with `aiohomekit` (ecobee closed its
+    developer API to new keys in 2024). A background thread holds one asyncio loop, polls
+    `list_accessories_and_characteristics()` every `poll_seconds`, and caches it; aid 1 is the
+    thermostat, other aids with a temperature are room sensors. Pair with `scripts/homekit-pair.py`;
+    `aiohomekitctl pair` (aiohomekit 4) doesn't save the pairing and strands the device (needs a
+    HomeKit reset on the thermostat). aiohomekit's Controller needs zeroconf browsers for both
+    `_hap._tcp` and `_hap._udp` or it raises TransportNotSupportedError.
+  - `photos` display: whole photo (`object-fit: contain`) over a blurred 96px copy
+    (`photo/<id>?size=small`). The stage clips itself with `-webkit-mask-image` because the TV's
+    engine drops `overflow: hidden` + `border-radius` clipping while children animate.
     Widgets may define `route()` for URLs under `/api/widget/<i>/`; `render()` gets `ctx.base`.
     Private per-widget options: `config.local.json` `"widget_options": {"<type>": {...}}`.
   - `photos`: slideshow of a folder (Pillow-resized copies cached in `cache/photos/`), filled via

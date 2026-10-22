@@ -8,7 +8,7 @@ source "$ROOT/local.env"
 
 # Files with your own values live only on the Pi and are never overwritten.
 rsync -a --exclude config.local.json --exclude calendars.json --exclude tv-token.txt \
-  --exclude google-photos.json --exclude /cache/ --exclude /photos/ --exclude __pycache__/ \
+  --exclude google-photos.json --exclude homekit-pairings.json --exclude charmap.json --exclude /cache/ --exclude /photos/ --exclude __pycache__/ \
   "$ROOT/pi/" "$PI_HOST:/opt/tv-dashboard/"
 ssh "$PI_HOST" 'sudo cp /opt/tv-dashboard/tv-dashboard.service /etc/systemd/system/ \
   && sudo systemctl daemon-reload && sudo systemctl restart tv-dashboard \

@@ -1,14 +1,21 @@
 // Slideshow of random photos from the Pi, crossfading every few seconds.
-// display: { "seconds": 12 }
+// display: {
+//   "seconds": 12,
+//   "fit": "blur"     whole photo over a blurred copy of itself (default)
+//          "contain"  whole photo on black
+//          "cover"    fill the card, cropping the edges
+// }
 Dashboard.register("photos", {
   render: function (el, data, display, ctx) {
     var st = el._photos;
     if (!st) {
-      el.className = "photos-stage";
-      el.innerHTML = '<img class="photos-img"><img class="photos-img"><div class="photos-empty"></div>';
-      var imgs = el.getElementsByTagName("img");
-      st = el._photos = { front: imgs[0], back: imgs[1], queue: [], timer: null,
-                          empty: el.lastChild, base: ctx.base };
+      var fit = display.fit || "blur";
+      el.className = "photos-stage photos-fit-" + fit;
+      var layer = '<div class="photos-layer"><img class="photos-bg"><img class="photos-fg"></div>';
+      el.innerHTML = layer + layer + '<div class="photos-empty"></div>';
+      var layers = el.getElementsByClassName("photos-layer");
+      st = el._photos = { front: layers[0], back: layers[1], queue: [], timer: null,
+                          empty: el.lastChild, base: ctx.base, blur: fit === "blur" };
     }
     st.list = data.photos || [];
 
@@ -33,15 +40,23 @@ Dashboard.register("photos", {
     }
     function next() {
       if (!st.queue.length) st.queue = shuffled();
-      var img = st.back;
-      img.onload = function () {
-        // Crossfade: the loaded back image fades in over the front one.
-        img.className = "photos-img show";
-        st.front.className = "photos-img";
+      var layer = st.back, id = st.queue.pop();
+      var fg = layer.lastChild, bg = layer.firstChild;
+      var pending = st.blur ? 2 : 1;
+      function loaded() {
+        if (--pending) return;
+        // Crossfade: the loaded back layer fades in over the front one.
+        layer.className = "photos-layer show";
+        st.front.className = "photos-layer";
         st.back = st.front;
-        st.front = img;
-      };
-      img.src = st.base + "/photo/" + st.queue.pop();
+        st.front = layer;
+      }
+      fg.onload = fg.onerror = loaded;
+      fg.src = st.base + "/photo/" + id;
+      if (st.blur) {
+        bg.onload = bg.onerror = loaded;
+        bg.src = st.base + "/photo/" + id + "?size=small";
+      }
     }
     next();
     st.timer = setInterval(next, (display.seconds || 12) * 1000);

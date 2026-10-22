@@ -111,6 +111,22 @@ re-checks every 6 hours (`album_sync_hours`) and copies new photos to `Albums/<n
 lists (often a few hundred), and may stop working if Google changes that page. Anyone with an
 album link can view the album, so keep links out of the repo.
 
+## ecobee thermostats (optional)
+
+The `ecobee` widget shows each thermostat's temperature, humidity, mode and its room sensors
+(temperature and occupancy). ecobee stopped issuing developer API keys in 2024, so it reads the
+thermostats locally over **HomeKit**, with no ecobee account or cloud. Read-only.
+
+1. Pi: `/opt/tv-dashboard/venv/bin/pip install aiohomekit`
+2. On each thermostat: **Settings → HomeKit**. Make sure HomeKit is enabled and note the 8-digit
+   code. (A thermostat can belong to only one HomeKit home; if it's in Apple Home, remove it first.)
+3. Find each thermostat's HomeKit id: `avahi-browse -rt _hap._tcp` on the Pi (the `id=` value).
+4. Pair from the Pi:
+   `/opt/tv-dashboard/venv/bin/python scripts/homekit-pair.py <id> <code> <alias>`.
+   Keys go to `/opt/tv-dashboard/homekit-pairings.json` (git-ignored). The script saves them
+   before anything else. aiohomekit 4's own `aiohomekitctl pair` doesn't save new pairings, which
+   leaves the thermostat paired to nobody until you reset its HomeKit pairing.
+
 ## Third-party code
 
 `pi/widgets/logo-3d/three-r128.js` is [Three.js](https://threejs.org) r128 (MIT license,

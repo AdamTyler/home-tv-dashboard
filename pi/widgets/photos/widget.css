@@ -1,11 +1,30 @@
 /* Photos fill the whole card, edge to edge. */
 .widget-photos { display: flex; flex-direction: column; padding: 0; }
-.photos-stage { flex: 1; position: relative; overflow: hidden; background: #000; }
-.photos-img {
-  position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-  object-fit: cover; opacity: 0; transition: opacity 1.5s ease-in-out;
+
+/* The TV's engine stops honouring the card's rounded clipping while children
+   animate (crossfades, neighbouring tiles scaling), so the stage clips itself
+   (the mask forces a real clip) and every layer is rounded too. */
+.photos-stage {
+  flex: 1; position: relative; overflow: hidden; background: #000;
+  border-radius: 1vw; -webkit-mask-image: -webkit-radial-gradient(white, black);
 }
-.photos-img.show { opacity: 1; }
+.photos-layer {
+  position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+  overflow: hidden; border-radius: 1vw;
+  opacity: 0; transition: opacity 1.5s ease-in-out;
+}
+.photos-layer.show { opacity: 1; }
+.photos-layer img { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+
+.photos-fg { object-fit: contain; }
+.photos-bg {
+  object-fit: cover; display: none;
+  filter: blur(1.4vw) brightness(.55) saturate(1.2);
+  transform: scale(1.15);  /* hide the blur's soft edges */
+}
+.photos-fit-blur .photos-bg { display: block; }
+.photos-fit-cover .photos-fg { object-fit: cover; }
+
 .photos-empty {
   display: none; position: absolute; top: 50%; left: 0; right: 0; transform: translateY(-50%);
   padding: 0 2vw; text-align: center; color: var(--muted); font-size: 1vw; line-height: 1.5;

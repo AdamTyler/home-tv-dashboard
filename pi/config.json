@@ -8,6 +8,13 @@
   "timezone": "UTC",
   "location": null,
   "widgets": [
+    {"type": "ecobee", "title": "Climate", "width": 1.1, "refresh": 30},
+    {"type": "photos", "title": "", "width": 1.6, "refresh": 60,
+     "display": {"seconds": 12}},
+    {"type": "logo-3d", "title": "", "width": 1.3, "refresh": 0,
+     "display": {"seconds": 16, "depth": 260, "fallback": "/widgets/logo/logo.svg"}}
+  ],
+  "_unused_widgets": [
     {"type": "home-server", "title": "Home server", "width": 1.1, "refresh": 15,
      "options": {"services": [
        {"name": "Plex",         "unit": "plexmediaserver"},
@@ -15,12 +22,6 @@
        {"name": "Transmission", "unit": "transmission-daemon"},
        {"name": "NordVPN",      "unit": "nordvpnd", "check": "nordvpn"}
      ]}},
-    {"type": "photos", "title": "", "width": 1.6, "refresh": 60,
-     "display": {"seconds": 12}},
-    {"type": "logo-3d", "title": "", "width": 1.3, "refresh": 0,
-     "display": {"seconds": 16, "depth": 260, "fallback": "/widgets/logo/logo.svg"}}
-  ],
-  "_unused_widgets": [
     {"type": "plex", "title": "Plex", "width": 1.6, "refresh": 15},
     {"type": "logo", "title": "", "width": 1.3, "refresh": 0,
      "display": {"src": "/widgets/logo/logo.svg", "seconds": 20}},

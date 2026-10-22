@@ -7,6 +7,9 @@ CLAUDE.local.md
 pi/calendars.json
 # Google sign-in for the photos widget, and Google's OAuth client file
 google-photos.json
+# HomeKit pairing keys (ecobee widget) and aiohomekit cache
+homekit-pairings.json
+charmap.json
 client_secret*.json
 # Photos and the resized photo cache on the Pi
 cache/

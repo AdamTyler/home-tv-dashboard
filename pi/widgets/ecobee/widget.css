@@ -1,0 +1,14 @@
+.eco-stat { margin-bottom: 1.2vh; }
+.eco-stat:last-child { margin-bottom: 0; }
+.eco-main { display: flex; align-items: baseline; justify-content: space-between; }
+.eco-name { font-size: 1.15vw; font-weight: 600; }
+.eco-temp { font-size: 1.6vw; font-weight: 300; }
+.eco-sub { color: var(--muted); font-size: .85vw; margin: .1vh 0 .5vh; }
+.eco-heating { color: #ff8a3d; }
+.eco-cooling { color: #58a6ff; }
+.eco-room {
+  display: grid; grid-template-columns: auto 1fr auto; grid-column-gap: .7vw;
+  align-items: center; padding: .2vh 0 .2vh .4vw; font-size: .95vw;
+}
+.eco-room .dot { width: .6vw; height: .6vw; }
+.eco-stale { font-size: .8vw; margin-top: .6vh; }

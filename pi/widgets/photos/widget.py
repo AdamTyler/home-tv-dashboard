@@ -17,7 +17,7 @@ options (set your own in config.local.json under "widget_options": {"photos": {.
   album_sync_hours: how often to re-check albums (default 6)
 
 routes (under /api/widget/<index>/):
-  photo/<id>          a resized photo
+  photo/<id>          a resized photo (?size=small: 96px, for blurred backgrounds)
   pick                page to open on your phone to choose photos
   pick/start (POST)   create a picker session
   pick/status         progress of the current pick
@@ -89,7 +89,8 @@ def data(options):
     return {"photos": ids[:300], "count": len(ids)}
 
 
-def _resized(options, photo_id):
+def _resized(options, photo_id, small=False):
+    """A copy sized for the TV; small=True is a tiny one for blurred backgrounds."""
     path = _scan(options).get(photo_id)
     if not path:
         return None
@@ -97,14 +98,14 @@ def _resized(options, photo_id):
         with open(path, "rb") as f:
             return f.read()
     os.makedirs(CACHE, exist_ok=True)
-    cached = os.path.join(CACHE, photo_id + ".jpg")
+    cached = os.path.join(CACHE, photo_id + ("-s" if small else "") + ".jpg")
     if not os.path.exists(cached) or os.path.getmtime(cached) < os.path.getmtime(path):
-        size = options.get("max_size", 1280)
+        size = 96 if small else options.get("max_size", 1280)
         with Image.open(path) as im:
             im = ImageOps.exif_transpose(im).convert("RGB")
             im.thumbnail((size, size))
             out = io.BytesIO()
-            im.save(out, "JPEG", quality=85)
+            im.save(out, "JPEG", quality=70 if small else 85)
         tmp = cached + ".tmp"
         with open(tmp, "wb") as f:
             f.write(out.getvalue())
@@ -311,7 +312,7 @@ def _start_album_scheduler(options):
 
 def route(options, method, subpath, query, body):
     if subpath.startswith("photo/") and method == "GET":
-        content = _resized(options, subpath[len("photo/"):])
+        content = _resized(options, subpath[len("photo/"):], small=query.get("size") == "small")
         return ("image/jpeg", content) if content is not None else None
     if subpath == "pick" and method == "GET":
         with open(os.path.join(HERE, "pick.html"), "rb") as f:
